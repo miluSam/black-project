@@ -1,16 +1,53 @@
 <template>
   <div>
-    <!-- 这里是组件的模板内容 -->
+    
   </div>
 </template>
 
 <script>
-export default {
+import { defineComponent, ref } from 'vue';
+
+export default defineComponent({
   name: 'CreatorCenter',
-  // 这里可以编写组件的逻辑
-};
+  props: {
+    isLoggedIn: {
+      type: Boolean,
+      default: false
+    }
+  },
+  setup(props) {
+    const searchQuery = ref('');
+    const search = () => {
+      console.log('搜索内容:', searchQuery.value);
+    };
+    const showLoginPopup = ref(false);
+    const userInfo = ref({});
+    const isDropdownVisible = ref(false);
+    const toggleDropdown = () => {
+      isDropdownVisible.value =!isDropdownVisible.value;
+    };
+    const goToUserCenter = () => {
+      console.log('跳转到用户中心');
+    };
+    const handleLogout = () => {
+      console.log('退出登录');
+    };
+    console.log('登录状态:', props.isLoggedIn);
+    return {
+      searchQuery,
+      search,
+      showLoginPopup,
+      userInfo,
+      isDropdownVisible,
+      toggleDropdown,
+      goToUserCenter,
+      handleLogout,
+      // 从 props 中获取 isLoggedIn
+    };
+  }
+});
 </script>
 
 <style scoped>
-/* 这里可以编写组件的样式 */
+
 </style>
