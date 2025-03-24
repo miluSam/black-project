@@ -53,20 +53,20 @@
           <div class="post-item">
             <div class="scroll-indicator left" @click="scrollLeft" v-if="canScrollLeft"></div>
             <div class="scroll-indicator right" @click="scrollRight" v-if="canScrollRight"></div>
-            <div class="game-list-container">
-              <div class="game-list-scroll" ref="gameListScroll">
+            <div class="section-list-container">
+              <div class="section-list-scroll" ref="sectionListScroll">
                 <div 
-                  v-for="game in games" 
-                  :key="game.id" 
-                  class="game-item"
-                  @click="handleGameClick(game)"
+                  v-for="section in sections" 
+                  :key="section.id" 
+                  class="section-item"
+                  @click="handlesectionClick(section)"
                 >
                   <img 
-                    :src="game.imageUrl" 
+                    :src="section.imageUrl" 
                     alt="游戏图标" 
-                    class="game-icon"
+                    class="section-icon"
                   >
-                  <span class="game-name">{{ game.gameName }}</span>
+                  <span class="section-name">{{ section.sectionName }}</span>
                 </div>
               </div>
             </div>
@@ -82,7 +82,7 @@
             <div v-if="post.imageUrl" class="post-image">
               <img :src="post.imageUrl" alt="帖子图片">
             </div>
-            <div class="gamename">{{ post.game.gameName }}</div>
+            <div class="sectionname">{{ post.section.sectionName }}</div>
             <div class="post-meta">
               
               <span class="post-time">{{ formatDate(post.postDate) }}</span>
@@ -99,7 +99,7 @@
       </div>
     </main>
 
-    <!-- 登录弹窗 -->
+    <!-- 登录弹窗
     <div v-if="showLoginPopup" class="login-popup">
       <div class="popup-content">
         <span class="close" @click="showLoginPopup = false">&times;</span>
@@ -136,8 +136,8 @@
         <button @click="handleLogin">登录</button>
         <button @click="handleRegister">注册</button>
       </div>
-    </div>
-    <router-view :search-query="searchQuery" :is-logged-in="isLoggedIn"></router-view>
+    </div> -->
+    <router-view></router-view>
   </div>
 </template>
 
@@ -151,18 +151,17 @@ export default defineComponent({
   setup() {
     // 数据响应式声明
     const isLoggedIn = ref(false);
-    const searchQuery = ref('');
+
     const posts = ref([]);
-    const games = ref([]);
-    const showLoginPopup = ref(false);
+    const sections = ref([]);
+
     const username = ref('');
     const password = ref('');
     const canScrollLeft = ref(false);
     const canScrollRight = ref(false);
     const userInfo = ref({});
-    const isDropdownVisible = ref(false);
+
     const captchaImage = ref('');
-    const captchaKey = ref('');
     const userCaptcha = ref('');
     const isCaptchaLoading = ref(false);
     
@@ -193,18 +192,14 @@ export default defineComponent({
       // 移除全局滚轮事件监听
       window.removeEventListener('wheel', handleGlobalScroll);
 
-      const gameListScroll = document.querySelector('.game-list-scroll');
-      if (gameListScroll) {
+      const sectionListScroll = document.querySelector('.section-list-scroll');
+      if (sectionListScroll) {
         // 移除滚动事件监听
-        gameListScroll.removeEventListener('scroll', updateScrollButtonsVisibility);
+        sectionListScroll.removeEventListener('scroll', updateScrollButtonsVisibility);
       }
     });
 
-    // 搜索方法
-    const search = () => {
-      console.log('搜索内容:', searchQuery.value);
-      // 在这里可以根据 `searchQuery` 执行搜索逻辑
-    };
+  
 
     // 退出登录方法
     const handleLogout = () => {
@@ -213,83 +208,79 @@ export default defineComponent({
       sessionStorage.removeItem('userInfo');
     };
 
-    // 切换下拉菜单方法
-    const toggleDropdown = () => {
-      isDropdownVisible.value =!isDropdownVisible.value;
-    };
-
+   
     // 跳转到用户中心方法
     const goToUserCenter = () => {
       console.log('跳转到用户中心');
       // 后续可以添加实际的路由跳转逻辑，例如：this.$router.push('/user - center');
     };
 
-    // 游戏点击处理方法
-    const handleGameClick = (game) => {
-      console.log('点击游戏:', game);
-      // 这里可以跳转到游戏详情页
+    // 点击分区处理方法
+    const handlesectionClick = (section) => {
+      console.log('点击分区:', section);
+      // 这里可以跳转到分区详情页
     };
-// 新增验证码获取方法
-const getCaptcha = async () => {
-  try {
-    isCaptchaLoading.value = true;
-    const response = await axios.get('http://localhost:7070/api/captcha', {
-      responseType: 'blob' // 重要：指定响应类型为blob
-    });
+// // 新增验证码获取方法
+// const getCaptcha = async () => {
+//   try {
+//     isCaptchaLoading.value = true;
+//     const response = await axios.get('http://localhost:7070/api/captcha', {
+//       responseType: 'blob' // 重要：指定响应类型为blob
+//     });
     
-    // 从响应头获取UUID
-    const uuid = response.headers['captcha-key'];
-    captchaKey.value = uuid;
+//     // 从响应头获取UUID
+//     const uuid = response.headers['captcha-key'];
+//     captchaKey.value = uuid;
     
-    // 转换Blob为URL
-    const blob = new Blob([response.data], { type: 'image/jpeg' });
-    captchaImage.value = URL.createObjectURL(blob);
-  } catch (error) {
-    console.error('获取验证码失败:', error);
-    // 可以添加用户提示
-  } finally {
-    isCaptchaLoading.value = false;
-  }
-};
-    // 登录方法
-    const handleLogin = () => {
-      console.log('登录账号:', username.value, '密码:', password.value);
-      const user = {
-        username: username.value,
-        password: password.value,
-        captcha: userCaptcha.value,
-        captchaKey: captchaKey.value
-      };
+//     // 转换Blob为URL
+//     const blob = new Blob([response.data], { type: 'image/jpeg' });
+//     captchaImage.value = URL.createObjectURL(blob);
+//   } catch (error) {
+//     console.error('获取验证码失败:', error);
+//     // 可以添加用户提示
+//   } finally {
+//     isCaptchaLoading.value = false;
+//   }
+// };
+//     // 登录方法
+//     const handleLogin = () => {
+//       console.log('登录账号:', username.value, '密码:', password.value);
+//       const user = {
+//         username: username.value,
+//         password: password.value,
+//         captcha: userCaptcha.value,
+//         captchaKey: captchaKey.value
+//       };
 
-      axios.post('http://localhost:7070/api/login', user)
-       .then(response => {
-          if (response.data.code === 200) {
-            isLoggedIn.value = true;
-            userInfo.value = response.data.data;
-            // 假设后端返回的响应中包含 JWT 字段，将其命名为 token
-            const jwtToken = response.data.data.token;
-            // 将 JWT 存储到 sessionStorage 中
-            sessionStorage.setItem('jwtToken', jwtToken);
-            // 将用户信息存储到 sessionStorage 中
-            sessionStorage.setItem('userInfo', JSON.stringify(userInfo.value));
-            console.log('登录成功');
-            showLoginPopup.value = false;
-            userCaptcha.value = '';
-      captchaKey.value = '';
-            // 使用路由跳转
-            // 这里需要根据实际的路由配置进行跳转，假设使用的是 vue-router
-            // router.push('/');
-          } else {
-            console.log('登录失败:', response.data.message);
-            getCaptcha();
-      userCaptcha.value = '';
+//       axios.post('http://localhost:7070/api/login', user)
+//        .then(response => {
+//           if (response.data.code === 200) {
+//             isLoggedIn.value = true;
+//             userInfo.value = response.data.data;
+//             // 假设后端返回的响应中包含 JWT 字段，将其命名为 token
+//             const jwtToken = response.data.data.token;
+//             // 将 JWT 存储到 sessionStorage 中
+//             sessionStorage.setItem('jwtToken', jwtToken);
+//             // 将用户信息存储到 sessionStorage 中
+//             sessionStorage.setItem('userInfo', JSON.stringify(userInfo.value));
+//             console.log('登录成功');
+//             showLoginPopup.value = false;
+//             userCaptcha.value = '';
+//       captchaKey.value = '';
+//             // 使用路由跳转
+//             // 这里需要根据实际的路由配置进行跳转，假设使用的是 vue-router
+//             // router.push('/');
+//           } else {
+//             console.log('登录失败:', response.data.message);
+//             getCaptcha();
+//       userCaptcha.value = '';
       
-          }
-        })
-       .catch(error => {
-          console.error('登录请求出错:', error);
-        });
-    };
+//           }
+//         })
+//        .catch(error => {
+//           console.error('登录请求出错:', error);
+//         });
+//     };
 
     // 获取帖子和游戏数据方法
     const fetchPosts = async () => {
@@ -300,17 +291,17 @@ const getCaptcha = async () => {
             'Authorization': `Bearer ${jwtToken}`
           }
         };
-        const [postsRes, gamesRes] = await Promise.all([
+        const [postsRes, sectionsRes] = await Promise.all([
           axios.get('http://localhost:7070/api/posts', config),
-          axios.get('http://localhost:7070/api/games', config)
+          axios.get('http://localhost:7070/api/sections', config)
         ]);
 
         posts.value = postsRes.data;
-        games.value = gamesRes.data;
+        sections.value = sectionsRes.data;
 
         // 确保DOM更新后执行
         setTimeout(() => {
-          const container = document.querySelector('.game-list-scroll');
+          const container = document.querySelector('.section-list-scroll');
           // 强制重置滚动位置
           if (container) {
             container.scrollLeft = 0;
@@ -355,12 +346,7 @@ const getCaptcha = async () => {
             console.error('路由跳转出错:', error);
         });
         };
-    // 注册方法
-    const handleRegister = () => {
-      console.log('执行注册操作');
-      // 在这里执行注册操作
-      showLoginPopup.value = false;
-    };
+    
 
     // 格式化日期方法
     const formatDate = (dateStr) => {
@@ -398,7 +384,7 @@ const getCaptcha = async () => {
 
     // 向右滚动方法
     const scrollRight = () => {
-      const container = document.querySelector('.game-list-scroll');
+      const container = document.querySelector('.section-list-scroll');
       if (!container) return;
 
       // 计算滚动的量
@@ -422,7 +408,7 @@ const getCaptcha = async () => {
 
     // 向左滚动方法
     const scrollLeft = () => {
-      const container = document.querySelector('.game-list-scroll');
+      const container = document.querySelector('.section-list-scroll');
       if (!container) return;
 
       const scrollAmount = 200;
@@ -436,7 +422,7 @@ const getCaptcha = async () => {
 
     // 更新滚动按钮可见性方法
     const updateScrollButtonsVisibility = () => {
-      const container = document.querySelector('.game-list-scroll');
+      const container = document.querySelector('.section-list-scroll');
       if (!container) return;
 
       canScrollLeft.value = container.scrollLeft > 0;
@@ -457,29 +443,22 @@ const getCaptcha = async () => {
     const currentSection = ref('community_center');
     return {
       isLoggedIn,
-      searchQuery,
       posts,
-      games,
-      showLoginPopup,
+      sections,
       username,
       password,
       canScrollLeft,
       canScrollRight,
       userInfo,
-      isDropdownVisible,
+
       currentSection,
       captchaImage,
   userCaptcha,
   isCaptchaLoading,
-  getCaptcha,
-      search,
       handleLogout,
-      toggleDropdown,
       goToUserCenter,
-      handleGameClick,
-      handleLogin,
+      handlesectionClick,
       fetchPosts,
-      handleRegister,
       formatDate,
       handleGlobalScroll,
       scrollRight,
@@ -629,23 +608,23 @@ main {
   overflow: hidden;
   align-items: center;
 }
-.game-list-container {
+.section-list-container {
   margin: 15px 0;
   overflow-x: hidden; /* 隐藏横向滚动条 */
   position: relative;
 }
 
-.game-list-scroll {
+.section-list-scroll {
   display: flex;
   gap: 25px;
   /* padding-bottom: 10px; */
   white-space: nowrap; /* 防止游戏项换行 */
   overflow-x: auto;
 }
-.game-list-scroll::-webkit-scrollbar {
+.section-list-scroll::-webkit-scrollbar {
   display: none; /* 隐藏滚动条 */
 }
-.game-item {
+.section-item {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -656,11 +635,11 @@ main {
   
 }
 
-.game-item:hover {
+.section-item:hover {
   transform: translateY(-3px);
 }
 
-.game-icon {
+.section-icon {
   width: 60px;
   height: 60px;
   border-radius: 12px;
@@ -669,7 +648,7 @@ main {
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
 
-.game-name {
+.section-name {
   font-size: 12px;
   color: #666;
   text-align: center;
@@ -681,7 +660,7 @@ main {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-.gamename {
+.sectionname {
   /* 绝对定位在.post-meta上方 */
   position: absolute;
   bottom: 40px; /* 根据实际高度调整，留出与时间的间距 */
@@ -817,26 +796,7 @@ main {
   color: #333;
   font-size: 14px;
 }
-.dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  background-color: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  border-radius: 4px;
-  padding: 5px 0;
-  z-index: 1;
-}
 
-.dropdown-item {
-  padding: 8px 16px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.dropdown-item:hover {
-  background-color: #f0f0f0;
-}
 .post-meta {
   display: flex;
   justify-content: space-between;
@@ -869,118 +829,4 @@ main {
 }
 
 
-/* 登录弹窗样式 */
-.login-popup {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.popup-content {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  position: relative;
-}
-
-.close {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  font-size: 24px;
-  cursor: pointer;
-}
-
-.popup-content input {
-  width: 95%;
-  padding: 10px;
-  margin-bottom: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
-.popup-content input:focus {
-  outline: none;
-}
-
-.popup-content button {
-  width: 100%;
-  padding: 10px;
-  margin-bottom: 10px;
-  background-color: #32373c;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.popup-content button:hover {
-  background-color: #2a3034;
-}
-/* 添加验证码区域样式 */
-.captcha-section {
-  margin: 15px 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.captcha-image-wrapper {
-  position: relative;
-  width: 120px;
-  height: 40px;
-}
-
-.captcha-image {
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-  border: 1px solid #ddd;
-}
-
-.captcha-loading {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-}
-
-.captcha-input {
-  flex: 1;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-}
-
-.refresh-button {
-  max-width: 25%;
-  max-height: 10%;
-  padding: 8px 12px;
-  background-color: #f0f0f0;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-.refresh-button:hover {
-  background-color: #e0e0e0;
-}
-
-.refresh-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
 </style>    

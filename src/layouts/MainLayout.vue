@@ -22,6 +22,44 @@
           </div>
         </div>
       </div>
+      <!-- 登录弹窗 -->
+    <div v-if="showLoginPopup" class="login-popup">
+      <div class="popup-content">
+        <span class="close" @click="showLoginPopup = false">&times;</span>
+        <h2>密码登录</h2>
+        <input type="text" v-model="username" placeholder="账号" />
+        <input type="password" v-model="password" placeholder="密码" />
+        <div class="captcha-section">
+      <div class="captcha-image-wrapper">
+        <img 
+          :src="captchaImage" 
+          alt="验证码"
+          @click="getCaptcha"
+          class="captcha-image"
+          v-if="captchaImage"
+        >
+        <div v-if="isCaptchaLoading" class="captcha-loading">
+          加载中...
+        </div>
+      </div>
+      <input
+        type="text"
+        v-model="userCaptcha"
+        placeholder="输入验证码"
+        class="captcha-input"
+      >
+      <button 
+        @click="getCaptcha"
+        class="refresh-button"
+        :disabled="isCaptchaLoading"
+      >
+        {{ isCaptchaLoading ? '加载中...' : '刷新验证码' }}
+      </button>
+    </div>
+        <button @click="handleLogin">登录</button>
+        <button @click="handleRegister">注册</button>
+      </div>
+    </div>
     </header>
     <main>
       <div class="left-block">
@@ -30,19 +68,100 @@
         <div @click="goToPage('developer-center')">开发者中心</div>
       </div>
       <!-- 主要内容区域 -->
-      <router-view></router-view>
+      <router-view :search-query="searchQuery" :is-logged-in="isLoggedIn"></router-view>
     </main>
   </div>
+  
 </template>
 
 <script setup>
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-
+import { useAuthStore } from '@/stores/auth.js';
+import axios from 'axios'
 const router = useRouter()
+const authStore = useAuthStore()
 
-const goToPage = (path) => {
+const showLoginPopup = ref(false)
+const username = ref('')
+const password = ref('')
+const captchaImage = ref('')
+const captchaKey = ref('')
+const userCaptcha = ref('')
+const isCaptchaLoading = ref(false)
+const isDropdownVisible = ref(false)
+const searchQuery = ref('');
+
+
+ // 切换下拉菜单方法
+ const toggleDropdown = () => {
+      isDropdownVisible.value =!isDropdownVisible.value;
+    };
+
+
+  // 搜索方法
+  const search = () => {
+      console.log('搜索内容:', searchQuery.value);
+      // 在这里可以根据 `searchQuery` 执行搜索逻辑
+    };
+// 注册方法
+const handleRegister = () => {
+      console.log('执行注册操作');
+      // 在这里执行注册操作
+      showLoginPopup.value = false;
+    };
+// 获取验证码方法
+const getCaptcha = async () => {
+  try {
+    isCaptchaLoading.value = true
+    const response = await axios.get('/api/captcha', {
+      responseType: 'blob'
+    })
+    
+    const uuid = response.headers['captcha-key']
+    captchaKey.value = uuid
+    
+    const blob = new Blob([response.data], { type: 'image/jpeg' })
+    captchaImage.value = URL.createObjectURL(blob)
+  } catch (error) {
+    console.error('获取验证码失败:', error)
+  } finally {
+    isCaptchaLoading.value = false
+  }
+}
+
+// 登录方法
+const handleLogin = async () => {
+  try {
+    const user = {
+      username: username.value,
+      password: password.value,
+      captcha: userCaptcha.value,
+      captchaKey: captchaKey.value
+    }
+    
+    const response = await axios.post('/api/login', user)
+    if (response.data.code === 200) {
+      authStore.login(response.data.data)
+      showLoginPopup.value = false
+      // 清理表单
+      username.value = ''
+      password.value = ''
+      userCaptcha.value = ''
+      captchaKey.value = ''
+    }
+  } catch (error) {
+    console.error('登录失败:', error)
+    getCaptcha() // 登录失败刷新验证码
+  }
+}
+
+const isLoggedIn = computed(() => authStore.isLoggedIn);
+const userInfo = computed(() => authStore.userInfo);const goToPage = (path) => {
   router.push({ name: path })
 }
+
+
 </script>
 
 <style>
@@ -136,5 +255,161 @@ body {
 .login button:hover {
   background-color: #2a3034;
 }
+.userinfo {
+  display: flex;
+  align-items: center;
+  /* position: absolute; */
+  /* right: 1320px; 根据实际布局调整 */
+  /* margin-top: -10px;
+  transform: translateX(-50%); */
+  position: relative;
+}
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  margin-right: 12px;
+  border: 2px solid #eee;
+}
 
+.username {
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+}
+/* 登录弹窗样式 */
+.login-popup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.popup-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.popup-content input {
+  width: 95%;
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+.popup-content input:focus {
+  outline: none;
+}
+
+.popup-content button {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+  background-color: #32373c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.popup-content button:hover {
+  background-color: #2a3034;
+}
+/* 添加验证码区域样式 */
+.captcha-section {
+  margin: 15px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.captcha-image-wrapper {
+  position: relative;
+  width: 120px;
+  height: 40px;
+}
+
+.captcha-image {
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  border: 1px solid #ddd;
+}
+
+.captcha-loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.captcha-input {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.refresh-button {
+  max-width: 25%;
+  max-height: 10%;
+  padding: 8px 12px;
+  background-color: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.refresh-button:hover {
+  background-color: #e0e0e0;
+}
+
+.refresh-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+/* 下拉菜单样式 */
+.dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  padding: 5px 0;
+  z-index: 1;
+}
+
+.dropdown-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dropdown-item:hover {
+  background-color: #f0f0f0;
+}
 </style>    
