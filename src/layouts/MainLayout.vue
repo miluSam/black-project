@@ -17,7 +17,7 @@
           <img :src="userInfo.avatar" alt="用户头像" class="avatar" />
           <span class="username">{{ userInfo.username }}</span>
           <div v-if="isDropdownVisible" class="dropdown">
-            <div class="dropdown-item" @click="goToUserCenter">用户中心</div>
+            <div class="dropdown-item" @click="goToPage(('UserCenter'))">用户中心</div>
             <div class="dropdown-item" @click="handleLogout">退出登录</div>
           </div>
         </div>
@@ -129,7 +129,11 @@ const getCaptcha = async () => {
     isCaptchaLoading.value = false
   }
 }
-
+// 退出登录方法
+const handleLogout = () => {
+  authStore.logout(); // 调用 logout 方法
+  router.push({ name: 'Index' }); // 退出后跳转到首页
+};
 // 登录方法
 const handleLogin = async () => {
   try {
@@ -141,6 +145,8 @@ const handleLogin = async () => {
     }
     
     const response = await axios.post('/api/login', user)
+    
+  authStore.login(user);
     if (response.data.code === 200) {
       authStore.login(response.data.data)
       showLoginPopup.value = false

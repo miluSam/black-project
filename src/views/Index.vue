@@ -1,27 +1,7 @@
 <template>
   <div id="app">
     <!-- 头部 -->
-    <!-- <header class="header">
-      <div class="logo">
-        <img src="https://blackbox-web.oss-cn-wuhan-lr.aliyuncs.com/blackbox.png" alt="Logo" />
-      </div>
-      <div class="search-bar">
-        <input type="text" v-model="searchQuery" placeholder="搜索帖子/游戏" />
-        <i class="el-icon-search" @click="search"></i>
-      </div>
-      <div class="login"> -->
-  <!-- 根据登录状态显示登录按钮或用户头像和用户名 -->
-  <!-- <button v-if="!isLoggedIn" @click="showLoginPopup = true">登录</button>
-  <div v-if="isLoggedIn" class="userinfo" @click="toggleDropdown">
-    <img :src="userInfo.avatar" alt="用户头像" class="avatar" />
-    <span class="username">{{ userInfo.username }}</span>
-    <div v-if="isDropdownVisible" class="dropdown">
-            <div class="dropdown-item" @click="goToUserCenter">用户中心</div>
-            <div class="dropdown-item" @click="handleLogout">退出登录</div>
-    </div>
-  </div>
-</div>
-    </header> -->
+  
 
     <!-- 内容区域 -->
     <main>
@@ -72,7 +52,7 @@
             </div>
           </div>
           <!-- 从第二个帖子开始展示posts数据 -->
-          <div v-for="post in posts" :key="post.id" class="post-item">
+          <div v-for="post in displayedPosts" :key="post.id" class="post-item">
             <div class="user-info">
               <img :src="post.user.image" alt="用户头像" class="avatar">
               <span class="username">{{ post.user.username }}</span>
@@ -99,59 +79,23 @@
       </div>
     </main>
 
-    <!-- 登录弹窗
-    <div v-if="showLoginPopup" class="login-popup">
-      <div class="popup-content">
-        <span class="close" @click="showLoginPopup = false">&times;</span>
-        <h2>密码登录</h2>
-        <input type="text" v-model="username" placeholder="账号" />
-        <input type="password" v-model="password" placeholder="密码" />
-        <div class="captcha-section">
-      <div class="captcha-image-wrapper">
-        <img 
-          :src="captchaImage" 
-          alt="验证码"
-          @click="getCaptcha"
-          class="captcha-image"
-          v-if="captchaImage"
-        >
-        <div v-if="isCaptchaLoading" class="captcha-loading">
-          加载中...
-        </div>
-      </div>
-      <input
-        type="text"
-        v-model="userCaptcha"
-        placeholder="输入验证码"
-        class="captcha-input"
-      >
-      <button 
-        @click="getCaptcha"
-        class="refresh-button"
-        :disabled="isCaptchaLoading"
-      >
-        {{ isCaptchaLoading ? '加载中...' : '刷新验证码' }}
-      </button>
-    </div>
-        <button @click="handleLogin">登录</button>
-        <button @click="handleRegister">注册</button>
-      </div>
-    </div> -->
+
     <router-view></router-view>
   </div>
 </template>
 
 <script>
-import { defineComponent, ref, onMounted, onBeforeUnmount} from 'vue';
+import { defineComponent, ref, onMounted, onBeforeUnmount, computed} from 'vue';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
+import { useAuthStore } from '../stores/auth.js';
 
 export default defineComponent({
   name: 'HomePage',
   setup() {
     // 数据响应式声明
     const isLoggedIn = ref(false);
-
+    const authStore = useAuthStore();
     const posts = ref([]);
     const sections = ref([]);
 
@@ -200,13 +144,11 @@ export default defineComponent({
     });
 
   
+    // 根据登录状态决定展示的帖子数量
+    const displayedPosts = computed(() => {
+      return authStore.isLoggedIn ? posts.value : posts.value.slice(0, 10);
+    });
 
-    // 退出登录方法
-    const handleLogout = () => {
-      isLoggedIn.value = false;
-      userInfo.value = {};
-      sessionStorage.removeItem('userInfo');
-    };
 
    
     // 跳转到用户中心方法
@@ -220,67 +162,6 @@ export default defineComponent({
       console.log('点击分区:', section);
       // 这里可以跳转到分区详情页
     };
-// // 新增验证码获取方法
-// const getCaptcha = async () => {
-//   try {
-//     isCaptchaLoading.value = true;
-//     const response = await axios.get('http://localhost:7070/api/captcha', {
-//       responseType: 'blob' // 重要：指定响应类型为blob
-//     });
-    
-//     // 从响应头获取UUID
-//     const uuid = response.headers['captcha-key'];
-//     captchaKey.value = uuid;
-    
-//     // 转换Blob为URL
-//     const blob = new Blob([response.data], { type: 'image/jpeg' });
-//     captchaImage.value = URL.createObjectURL(blob);
-//   } catch (error) {
-//     console.error('获取验证码失败:', error);
-//     // 可以添加用户提示
-//   } finally {
-//     isCaptchaLoading.value = false;
-//   }
-// };
-//     // 登录方法
-//     const handleLogin = () => {
-//       console.log('登录账号:', username.value, '密码:', password.value);
-//       const user = {
-//         username: username.value,
-//         password: password.value,
-//         captcha: userCaptcha.value,
-//         captchaKey: captchaKey.value
-//       };
-
-//       axios.post('http://localhost:7070/api/login', user)
-//        .then(response => {
-//           if (response.data.code === 200) {
-//             isLoggedIn.value = true;
-//             userInfo.value = response.data.data;
-//             // 假设后端返回的响应中包含 JWT 字段，将其命名为 token
-//             const jwtToken = response.data.data.token;
-//             // 将 JWT 存储到 sessionStorage 中
-//             sessionStorage.setItem('jwtToken', jwtToken);
-//             // 将用户信息存储到 sessionStorage 中
-//             sessionStorage.setItem('userInfo', JSON.stringify(userInfo.value));
-//             console.log('登录成功');
-//             showLoginPopup.value = false;
-//             userCaptcha.value = '';
-//       captchaKey.value = '';
-//             // 使用路由跳转
-//             // 这里需要根据实际的路由配置进行跳转，假设使用的是 vue-router
-//             // router.push('/');
-//           } else {
-//             console.log('登录失败:', response.data.message);
-//             getCaptcha();
-//       userCaptcha.value = '';
-      
-//           }
-//         })
-//        .catch(error => {
-//           console.error('登录请求出错:', error);
-//         });
-//     };
 
     // 获取帖子和游戏数据方法
     const fetchPosts = async () => {
@@ -444,6 +325,7 @@ export default defineComponent({
     return {
       isLoggedIn,
       posts,
+      displayedPosts,
       sections,
       username,
       password,
@@ -455,7 +337,6 @@ export default defineComponent({
       captchaImage,
   userCaptcha,
   isCaptchaLoading,
-      handleLogout,
       goToUserCenter,
       handlesectionClick,
       fetchPosts,
