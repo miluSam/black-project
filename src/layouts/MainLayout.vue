@@ -70,6 +70,13 @@
       <!-- 主要内容区域 -->
       <router-view :search-query="searchQuery" :is-logged-in="isLoggedIn"></router-view>
     </main>
+     <!-- 未登录时的登录提示块 -->
+  <div v-if="!authStore.isLoggedIn" class="post-item login-prompt">
+    <div class="login-prompt-content">
+      <p>登录查看更多精彩内容</p>
+      <button @click="showLoginPopup = true">登录</button>
+    </div>
+  </div>
   </div>
   
 </template>
@@ -417,5 +424,33 @@ body {
 
 .dropdown-item:hover {
   background-color: #f0f0f0;
+}
+/* 登录提示块样式 */
+.login-prompt {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f7f8f9;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+
+.login-prompt-content p {
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.login-prompt-content button {
+  padding: 10px 20px;
+  background-color: #409eff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.login-prompt-content button:hover {
+  background-color: #66b1ff;
 }
 </style>    
