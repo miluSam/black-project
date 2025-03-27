@@ -52,16 +52,26 @@
             </div>
           </div>
           <!-- 从第二个帖子开始展示posts数据 -->
-          <div v-for="post in displayedPosts" :key="post.id" class="post-item">
+          <div @click="handlePostClick(post.id)" v-for="post in displayedPosts" :key="post.id" class="post-item">
             <div class="user-info">
-              <img :src="post.user.image" alt="用户头像" class="avatar">
+              <img :src="post.user.imageUrl" alt="用户头像" class="avatar">
               <span class="username">{{ post.user.username }}</span>
             </div>
             <h2>{{ post.title }}</h2>
             <p>{{ post.content }}</p>
-            <div v-if="post.imageUrl" class="post-image">
-              <img :src="post.imageUrl" alt="帖子图片">
-            </div>
+            <div v-if="post.imageUrl" class="post-image" :class="{ 'multiple-images': post.imageUrl.length > 1 }">
+  <template v-if="post.imageUrl.length === 1">
+    <img :src="post.imageUrl[0]" alt="帖子图片" class="single-image">
+  </template>
+  <template v-else>
+    <div v-for="(img, index) in post.imageUrl.slice(0, 3)" :key="index" style="position: relative;">
+      <img :src="img" alt="帖子图片">
+      <span v-if="index === 2 && post.imageUrl.length > 3" class="image-count">
+        {{ post.imageUrl.length }}张
+      </span>
+    </div>
+  </template>
+</div>
             <div class="sectionname">{{ post.section.sectionName }}</div>
             <div class="post-meta">
               
@@ -169,7 +179,12 @@ export default defineComponent({
     });
 
 
-   
+    const handlePostClick = (postId)=>{
+      router.push({ 
+    name: 'PostDetail', 
+    query: { id: postId } 
+  });
+    }
     // 跳转到用户中心方法
     const goToUserCenter = () => {
       console.log('跳转到用户中心');
@@ -366,6 +381,7 @@ hotPosts,
   userCaptcha,
   isCaptchaLoading,
       goToUserCenter,
+      handlePostClick,
       handlesectionClick,
       fetchPosts,
       formatDate,
@@ -462,15 +478,7 @@ main {
   background: #2a3034;
 }
 /* 侧边栏尺寸锁定 */
-.right-block {
-  width: 350px;
-  height: 545px;
-  margin-left: 20px;
-  position: sticky;
-  top: 85px; /* 与头部保持10px间距 */
-  background-color: #ffffff;
-  
-}
+
 .left-block,
 .right-block,
 .post-wrapper {
@@ -559,7 +567,7 @@ main {
 
 .section-name {
   font-size: 12px;
-  color: #666;
+  color: rgb(20, 25, 30);
   text-align: center;
   line-height: 1.3;
   max-width: 80px;
@@ -568,19 +576,23 @@ main {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  
 }
 .sectionname {
   /* 绝对定位在.post-meta上方 */
   position: absolute;
-  bottom: 40px; /* 根据实际高度调整，留出与时间的间距 */
+  
   left: 20px;
   right: 20px;
   font-size: 12px;
-  color: #666;
   /* 确保文字不会溢出 */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  background-color: rgb(243, 244, 245);
+  max-width: 60px;
+  text-align: center;
+  border-radius: 4px;
 }
 .post-item:not(:first-child) {
   height: 300px;
@@ -588,7 +600,7 @@ main {
   padding-top: 50px;
 }
 .post-item:not(:first-child) h2 {
-  margin-top: 10px;
+  /* margin-top: 10px; */
   font-size: 16px;
 }
 
@@ -664,16 +676,63 @@ main {
   font-size: 14px;
   color: #666;
 }
-.post-image img {
-  max-width: 60%; /* 缩小图片宽度 */
-  max-height: 200px; /* 添加高度限制 */
+/* 帖子图片容器样式 */
+.post-image {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+/* 单张图片样式 */
+.post-image img.single-image {
+  max-width: 60%; 
+  max-height: 190px; 
   border-radius: 4px;
   margin: 10px 0;
-  display: block; /* 修复图片居中问题 */
-  margin-left: auto;
+  display: grid; 
   margin-right: auto;
   margin-top: -30px;
 }
+
+/* 多张图片样式 */
+.post-image.multiple-images {
+  display: grid;
+  grid-template-columns: repeat(3, 190px);
+  gap: 5px;
+  margin-top: -30px;
+}
+
+.post-image.multiple-images img {
+  width: 190px;
+  height: 190px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+/* 图片数量提示 */
+.image-count {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+/* .post-image img {
+  max-width: 60%; 
+  max-height: 200px; 
+  border-radius: 4px;
+  margin: 10px 0;
+  display: block; 
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: -30px;
+} */
 .user-info {
   display: flex;
   align-items: center;
@@ -693,8 +752,8 @@ main {
   position: relative;
 }
 .avatar {
-  width: 36px;
-  height: 36px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   margin-right: 12px;
   border: 2px solid #eee;
@@ -739,14 +798,14 @@ main {
 /* 右边块 */
 .right-block {
   width: 350px;
-  height: 545px;
+  height: 500px;
   margin-left: 20px;
   position: sticky;
   top: 85px;
   background-color: #ffffff;
   padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+ 
 }
 
 .hot-posts-title {

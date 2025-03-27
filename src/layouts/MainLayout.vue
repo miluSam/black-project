@@ -434,6 +434,7 @@ body {
   border-radius: 8px;
   padding: 20px;
   text-align: center;
+  max-width: 85%;
 }
 
 .login-prompt-content p {
