@@ -153,9 +153,17 @@ const handleLogin = async () => {
     
     const response = await axios.post('/api/login', user)
     
-  authStore.login(user);
     if (response.data.code === 200) {
-      authStore.login(response.data.data)
+      // 确保存储 token
+      const token = response.data.data.token;
+      sessionStorage.setItem('jwtToken', token);
+      
+      // 更新 Pinia 状态
+      authStore.login({
+        ...response.data.data,
+        token // 确保 token 也被存储在 userInfo 中
+      });
+      
       showLoginPopup.value = false
       // 清理表单
       username.value = ''
@@ -165,7 +173,7 @@ const handleLogin = async () => {
     }
   } catch (error) {
     console.error('登录失败:', error)
-    getCaptcha() // 登录失败刷新验证码
+    getCaptcha()
   }
 }
 
@@ -208,6 +216,7 @@ body {
   left: 0;
   width: 100%;
   z-index: 4;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 .logo img {

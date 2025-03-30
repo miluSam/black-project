@@ -9,10 +9,18 @@ export const useAuthStore = defineStore('auth', {
     login(user) {
       this.isLoggedIn = true
       this.userInfo = user
+      // 确保 token 存储在 sessionStorage
+      if (user.token) {
+        sessionStorage.setItem('jwtToken', user.token)
+      }
     },
     logout() {
       this.isLoggedIn = false
       this.userInfo = {}
+      // 清除存储的 token
+      sessionStorage.removeItem('jwtToken')
+      localStorage.removeItem('jwtToken')
     }
-  }
+  },
+  persist: true // 如果需要持久化状态
 })

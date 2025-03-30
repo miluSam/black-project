@@ -182,7 +182,8 @@ export default defineComponent({
     const handlePostClick = (postId)=>{
       router.push({ 
     name: 'PostDetail', 
-    query: { id: postId } 
+    query: { postId: postId } ,
+    
   });
     }
     // 跳转到用户中心方法
@@ -575,6 +576,7 @@ main {
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   
 }
