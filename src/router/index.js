@@ -39,7 +39,7 @@ const routes = [
                 path: '/post-detail',
                 name: 'PostDetail',
                 component: PostDetail,
-                
+
             }
         ]
     }
@@ -51,21 +51,17 @@ const router = createRouter({
 });
 // 全局前置守卫
 router.beforeEach((to, from, next) => {
-    const authStore = useAuthStore()
+    const authStore = useAuthStore();
+    authStore.initializeFromStorage();
+    const token = localStorage.getItem('jwtToken');
     
-    // 确保状态是最新的
-    authStore.initializeFromStorage()
-  
-    if (to.meta.requiresAuth && !authStore.isLoggedIn) {
-      ElMessage({
-        message: '请先登录以访问此页面',
-        type: 'warning',
-        duration: 3000
-      })
-      next(false)
+    if (to.meta.requiresAuth && (!authStore.isLoggedIn || !token)) {
+        ElMessage.warning('请先登录以访问此页面');
+        next({ name: 'Index' });
     } else {
-      next()
+        next();
     }
-  })
+});
+
 
 export default router;

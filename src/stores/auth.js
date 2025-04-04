@@ -12,23 +12,35 @@ export const useAuthStore = defineStore('auth', {
       // 存储token和用户信息
       sessionStorage.setItem('jwtToken', user.token)
       sessionStorage.setItem('userInfo', JSON.stringify(user))
+      localStorage.setItem('jwtToken', user.token)
+      localStorage.setItem('userInfo', JSON.stringify(user))
     },
     logout() {
       this.isLoggedIn = false
       this.userInfo = {}
       sessionStorage.removeItem('jwtToken')
       sessionStorage.removeItem('userInfo')
+      localStorage.removeItem('jwtToken')
+      localStorage.removeItem('userInfo')
     },
     // 新增初始化方法
-    initializeFromStorage() {
-      const token = sessionStorage.getItem('jwtToken');
-      if (token) {
-        const userInfo = sessionStorage.getItem('userInfo');
-        if (userInfo) {
-          this.isLoggedIn = true;
-          this.userInfo = JSON.parse(userInfo);
-        }
+initializeFromStorage() {
+  const token = sessionStorage.getItem('jwtToken') || localStorage.getItem('jwtToken');
+  const userInfo = sessionStorage.getItem('userInfo') || localStorage.getItem('userInfo');
+  
+  if (token && userInfo) {
+    try {
+      this.isLoggedIn = true;
+      this.userInfo = JSON.parse(userInfo);
+      // 确保token也被存储在userInfo中
+      if (!this.userInfo.token) {
+        this.userInfo.token = token;
       }
+    } catch (e) {
+      console.error('解析用户信息失败:', e);
+      this.logout();
     }
+  }
+}
   }
 })

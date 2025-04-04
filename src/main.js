@@ -46,9 +46,12 @@ axios.interceptors.response.use(response => {
 }, error => {
   if (error.response && error.response.status === 401) {
     const authStore = useAuthStore();
-    authStore.logout();
-    router.push({ name: 'Index' }); // 跳转到首页或登录页
-    ElMessage.error('登录已过期，请重新登录');
+    // 只有在确实是token过期时才logout
+    if (authStore.isLoggedIn) {
+      authStore.logout();
+      ElMessage.error('登录已过期，请重新登录');
+      router.push({ name: 'Index' });
+    }
   }
   return Promise.reject(error);
 });

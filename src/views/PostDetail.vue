@@ -46,31 +46,34 @@
     </div>
   </div>
           
-          <!-- 评论区域 -->
-          <div class="comments-section">
-            <h3>评论 ({{ post.commentsCount }})</h3>
-            
-            <div v-for="comment in post.comments" :key="comment.id" class="comment">
-  <div class="comment-header">
-    <img :src="comment.user?.imageUrl || 'default-avatar.jpg'" alt="用户头像" class="avatar">
-    <span class="username">{{ comment.user?.username || '匿名用户' }}</span>
-  </div>
-  <div class="comment-content">
-    <p>{{ comment.commentText }}</p>
-    <span class="comment-date">{{ formatDate(comment.commentDate) }}</span>
-  </div>
-  
-  <!-- 子评论部分修改为： -->
-  <div v-if="comment.childComments && comment.childComments.length" class="replies-container">
-    <div v-for="reply in comment.childComments" 
-         :key="reply.id" 
-         class="reply">
-      <span class="reply-username">{{ reply.user?.username || '匿名用户' }}：</span>
-      <span class="reply-content">{{ reply.commentText }}</span>
+        <!-- 评论区域 -->
+  <div class="comments-section">
+    <h3>评论 ({{ post.commentsCount }})</h3>
+    
+    <div v-for="comment in post.comments" :key="comment.id" class="comment">
+      <!-- 父评论区域 - 添加点击事件 -->
+      <div class="comment-header" @click="setReplyContext(comment.id, comment.user?.id)" @contextmenu.prevent="showDeleteMenu($event, comment.id)">
+  <img :src="comment.user?.imageUrl || 'default-avatar.jpg'" alt="用户头像" class="avatar">
+  <span class="username">{{ comment.user?.username || '匿名用户' }}</span>
+</div>
+
+      <div class="comment-content">
+        <p>{{ comment.commentText }}</p>
+        <span class="comment-date">{{ formatDate(comment.commentDate) }}</span>
+      </div>
+      
+      <!-- 子评论部分 - 添加点击事件 -->
+      <div v-if="comment.childComments && comment.childComments.length" class="replies-container">
+        <div v-for="reply in comment.childComments" 
+             :key="reply.id" 
+             class="reply"
+             @click="setReplyContext(comment.id, reply.user?.id)">
+          <span class="reply-username">{{ reply.user?.username || '匿名用户' }}：</span>
+          <span class="reply-content">{{ reply.commentText }}</span>
+        </div>
+      </div>
     </div>
   </div>
-</div>
-          </div>
         </div>
         <div v-else class="loading">加载中...</div>
       </div>
@@ -85,7 +88,9 @@
         <button @click="sendComment">发送</button>
       </div>
     </div>
+    
   </div>
+  
 </template>
 
 <script>
@@ -107,11 +112,11 @@ export default defineComponent({
     const transitionName = ref('slide-next');
     const comments = ref([]);
     const authStore = useAuthStore();
-    
     const replyContext = ref({
   parentCommentId: null,
   replyToUserId: null
 });
+//右键展示删除菜单
 
 // 设置回复上下文的方法
 const setReplyContext = (parentId, replyUserId) => {
@@ -128,7 +133,17 @@ const setReplyContext = (parentId, replyUserId) => {
       return post.value.relatedPosts.slice(0, 5);
     });
 
+    const checkAndRefreshToken = async () => {
+  const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+  if (!jwtToken) {
+    authStore.logout();
+    ElMessage.error('登录已过期，请重新登录');
+    return false;
+  }
+  return true;
+};
     const fetchPostDetail = async () => {
+      if (!(await checkAndRefreshToken())) return;
       try {
         const postId = route.query.postId;
         if (!postId) throw new Error('缺少帖子ID');
@@ -138,12 +153,11 @@ const setReplyContext = (parentId, replyUserId) => {
           throw new Error('未登录或登录已过期');
         }
 
-        const jwtToken = sessionStorage.getItem('jwtToken') || 
-                        localStorage.getItem('jwtToken') ||
-                        authStore.userInfo?.token;
+        const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
 
         if (!jwtToken) {
-          throw new Error('未找到认证令牌');
+          console.error('未找到认证令牌');
+    return;
         }
 
         const response = await axios.get('/api/post-detail', {
@@ -194,32 +208,51 @@ const prevImage = () => {
 
     
 const sendComment = async () => {
-  if (!authStore.isLoggedIn) {
-    ElMessage.error('请先登录');
-    return;
-  }
-  
+  console.log("即将发送评论请求",  newComment.value);
   try {
+    // 确保重新从storage获取最新状态
+    authStore.initializeFromStorage();
+    
+    if (!authStore.isLoggedIn) {
+      ElMessage.error('请先登录');
+      return;
+    }
+    
+    if (!newComment.value.trim()) {
+      ElMessage.error('评论内容不能为空');
+      return;
+    }
+    
     const commentData = {
       postId: post.value.id,
-      content: newComment.value,
+      commentText: newComment.value,
       userId: authStore.userInfo.id,
       parentCommentId: replyContext.value.parentCommentId,
       replyToUserId: replyContext.value.replyToUserId
     };
 
-    await axios.post('/api/comments', commentData, {
+    const response = await axios.post('/api/comments/add', commentData, {
       headers: {
         Authorization: `Bearer ${authStore.userInfo.token}`
       }
     });
 
-    // 重置状态
-    newComment.value = '';
-    replyContext.value = { parentCommentId: null, replyToUserId: null };
-    await fetchPostDetail(); // 重新加载评论
+    if (response.data.code === 200) {
+      ElMessage.success('评论成功');
+      newComment.value = '';
+      replyContext.value = { parentCommentId: null, replyToUserId: null };
+      await fetchPostDetail();
+    } else {
+      ElMessage.error(response.data.message || '评论失败');
+    }
   } catch (error) {
-    ElMessage.error('评论失败');
+    console.error('评论失败:', error);
+    if (error.response?.status === 401) {
+  ElMessage.error('登录已过期，请重新登录');
+  return;
+} else {
+      ElMessage.error(error.response?.data?.message || '评论失败');
+    }
   }
 };
     
@@ -685,5 +718,22 @@ main {
   padding: 50px;
   background-color: white;
   border-radius: 8px;
+}
+/* 添加一些交互样式，让用户知道可以点击评论 */
+.comment-header, .reply {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.comment-header:hover {
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+
+.reply:hover {
+  background-color: #f0f0f0;
+  border-radius: 4px;
+  padding: 2px 5px;
 }
 </style>
