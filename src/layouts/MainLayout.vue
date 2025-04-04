@@ -231,6 +231,7 @@ body {
   margin-left: 130px;
   max-width: 600px;
   position: relative;
+  
 }
 
 .search-bar input {
@@ -290,7 +291,7 @@ body {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  margin-right: 12px;
+  margin-right: 10px;
   border: 2px solid #eee;
 }
 

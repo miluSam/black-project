@@ -50,25 +50,22 @@ const router = createRouter({
     routes
 });
 // 全局前置守卫
-// 全局前置守卫
 router.beforeEach((to, from, next) => {
-    const authStore = useAuthStore();
-
-    // 检查目标路由是否需要登录
+    const authStore = useAuthStore()
+    
+    // 确保状态是最新的
+    authStore.initializeFromStorage()
+  
     if (to.meta.requiresAuth && !authStore.isLoggedIn) {
-        // 显示提示信息
-        ElMessage({
-            message: '请先登录以访问此页面',
-            type: 'warning',
-            duration: 3000 // 提示显示时间
-        });
-
-        // 不进行跳转，停留在当前页面
-        next(false);
+      ElMessage({
+        message: '请先登录以访问此页面',
+        type: 'warning',
+        duration: 3000
+      })
+      next(false)
     } else {
-        // 否则继续导航
-        next();
+      next()
     }
-});
+  })
 
 export default router;

@@ -2,9 +2,9 @@
   <div class="left-block">
     <div class="left-section-top">
       <div 
-        class="community_center"
-        :class="{ active: currentSection === 'community_center' }"
-        @click="currentSection = 'community_center'"
+        class="index_center"
+        :class="{ active: currentSection === 'index_center' }"
+        @click="goToPage('')"
       >社区中心</div>
       <div 
         class="creator_center"
@@ -17,7 +17,7 @@
         @click="goToPage('developer-center')"
       >开发者中心</div>
     </div>
-    <button class="left-section-button" @click="emit('new-post')">
+    <button class="left-section-button" @click="goToPage('creator-center')">
       +发布内容
     </button>
   </div>
@@ -28,9 +28,8 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 const router = useRouter();
-const currentSection = ref('community_center');
+const currentSection = ref('index_center');
 
-const emit = defineEmits(['new-post']);
 
 const goToPage = (path) => {
   router.push({ path: `/${path}` })

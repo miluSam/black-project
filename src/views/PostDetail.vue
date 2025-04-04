@@ -2,22 +2,7 @@
   <div>
     <main>
       <!-- 左侧边栏保持不变 -->
-      <div class="left-block ">
-        <div class="left-section-top">
-          <div class="community_center"
-          :class="{ active: currentSection === 'community_center' }"
-          @click="currentSection = 'community_center'"
-          >社区中心</div>
-          <div class="creator_center"
-          :class="{ active: currentSection === 'creator_center' }"
-          @click="goToPage('creator-center')"
-          >创作者中心</div>
-          <div class="developer_center"
-          :class="{ active: currentSection === 'developer_center' }"
-          @click="goToPage('developer-center')"
-          >开发者中心</div>
-        </div>
-      </div>
+      <LeftBlock />
       
       <!-- 中间内容区域 -->
       <div class="post-wrapper">
@@ -91,26 +76,7 @@
       </div>
       
       <!-- 右侧边栏保持不变 -->
-      <div class="right-block">
-        <div class="hot-posts-title">热门帖子</div>
-        <div class="hot-posts-list">
-          <div v-for="post in hotPosts" :key="post.id" class="hot-post-item">
-            <div class="hot-post-image">
-              <img 
-                :src="post.imageUrl || post.section?.imageUrl || 'default-image-url.jpg'" 
-                alt="帖子图片" 
-                class="hot-post-img"/>
-            </div>
-            <div class="hot-post-content">
-              <h3>{{ post.title }}</h3>
-              <div class="hot-post-meta">
-                <span class="hot-post-likes">👍 {{ post.likesCount }}</span>
-                <span class="hot-post-comments">💬 {{ post.commentsCount }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <RightBlock :hot-posts="hotPosts" />
     </main>
     
     <div class="fixed-comment-input" v-if="post">
@@ -127,6 +93,7 @@ import { defineComponent, ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import { useAuthStore } from '../stores/auth.js';
+import { ElMessage } from 'element-plus'
 
 export default defineComponent({
   name: 'PostDetail',
@@ -138,7 +105,23 @@ export default defineComponent({
     const currentImageIndex = ref(0);
     const newComment = ref('');
     const transitionName = ref('slide-next');
+    const comments = ref([]);
+    const authStore = useAuthStore();
+    
+    const replyContext = ref({
+  parentCommentId: null,
+  replyToUserId: null
+});
 
+// 设置回复上下文的方法
+const setReplyContext = (parentId, replyUserId) => {
+  replyContext.value = {
+    parentCommentId: parentId,
+    replyToUserId: replyUserId
+  };
+  // 自动聚焦输入框（可选）
+  document.querySelector('.fixed-comment-input textarea')?.focus();
+};
     
     const hotPosts = computed(() => {
       if (!post.value || !post.value.relatedPosts) return [];
@@ -185,6 +168,16 @@ export default defineComponent({
       }
     };
     
+    const fetchComments = async () => {
+  try {
+    const response = await axios.get(`/api/post-detail/${post.value.id}`);
+    comments.value = response.data.comments || [];
+  } catch (error) {
+    console.error('获取评论失败:', error);
+    ElMessage.error('获取评论失败');
+  }
+};
+
     const nextImage = () => {
   transitionName.value = 'slide-next';
   if (currentImageIndex.value < post.value.imageUrl.length - 1) {
@@ -200,37 +193,35 @@ const prevImage = () => {
 };
 
     
-    const sendComment = async () => {
-      if (!newComment.value.trim()) return;
-      
-      try {
-        const authStore = useAuthStore();
-        const jwtToken = sessionStorage.getItem('jwtToken') || 
-                        localStorage.getItem('jwtToken') ||
-                        authStore.userInfo?.token;
-
-        const response = await axios.post('/api/comments', {
-          postId: post.value.id,
-          commentText: newComment.value
-        }, {
-          headers: {
-            'Authorization': `Bearer ${jwtToken}`
-          }
-        });
-        
-        // 添加新评论到列表
-        post.value.comments.unshift({
-          ...response.data,
-          user: authStore.userInfo,
-          childComments: []
-        });
-        
-        post.value.commentsCount++;
-        newComment.value = '';
-      } catch (err) {
-        console.error('发表评论失败:', err);
-      }
+const sendComment = async () => {
+  if (!authStore.isLoggedIn) {
+    ElMessage.error('请先登录');
+    return;
+  }
+  
+  try {
+    const commentData = {
+      postId: post.value.id,
+      content: newComment.value,
+      userId: authStore.userInfo.id,
+      parentCommentId: replyContext.value.parentCommentId,
+      replyToUserId: replyContext.value.replyToUserId
     };
+
+    await axios.post('/api/comments', commentData, {
+      headers: {
+        Authorization: `Bearer ${authStore.userInfo.token}`
+      }
+    });
+
+    // 重置状态
+    newComment.value = '';
+    replyContext.value = { parentCommentId: null, replyToUserId: null };
+    await fetchPostDetail(); // 重新加载评论
+  } catch (error) {
+    ElMessage.error('评论失败');
+  }
+};
     
     const formatDate = (dateStr) => {
       const options = { year: 'numeric', month: 'long', day: 'numeric' };
@@ -246,6 +237,8 @@ const prevImage = () => {
       currentImageIndex,
       hotPosts,
       newComment,
+      setReplyContext,
+      fetchComments,
       nextImage,
       prevImage,
       sendComment,
@@ -263,6 +256,7 @@ main {
   padding-top: 30px;
   min-height: calc(100vh - 75px);
   margin-top: 10px;
+  position: relative; 
 }
 
 .left-block {
@@ -493,6 +487,7 @@ main {
 /* 评论区域样式 */
 .comments-section {
   margin-top: 30px;
+  margin-bottom: 60px;
 }
 
 .comments-section h3 {
@@ -513,7 +508,6 @@ main {
 .comment-header {
   display: flex;
   align-items: center;
-  margin-bottom: 10px;
 }
 
 .comment-header .avatar {
@@ -555,7 +549,7 @@ main {
   padding: 10px;
   background-color: #f7f8f9;
   border-radius: 4px;
-  width: calc(100% - 40px);
+  width: calc(100% - 15%);
 }
 
 .reply {
@@ -569,17 +563,17 @@ main {
   font-weight: 500;
   color: #409EFF;
 }
-
-/* 右侧边栏样式 */
+/* 右边块 */
 .right-block {
   width: 350px;
-  height: 545px;
+  height: 500px;
   margin-left: 20px;
   position: sticky;
   top: 85px;
   background-color: #ffffff;
-  border-radius: 8px;
   padding: 20px;
+  border-radius: 8px;
+ 
 }
 
 .hot-posts-title {
@@ -639,25 +633,27 @@ main {
   color: #666;
 }
 
-/* 固定评论输入框 */
+/* 修改固定评论输入框样式 */
 .fixed-comment-input {
   position: fixed;
   bottom: 0;
-  left: 0;
-  right: 0;
+  left: 44.4%; /* 居中定位 */
+  transform: translateX(-50%); /* 精确居中 */
+  width: 610px; /* 与.post-detail同宽 */
   background-color: white;
-  padding: 10px;
+  padding: 10px 20px; /* 左右内边距与.post-detail一致 */
   border-top: 1px solid #eee;
-  /* box-shadow: 0 -2px 5px rgba(0,0,0,0.1); */
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
   z-index: 100;
+  box-sizing: border-box; /* 确保宽度包含内边距 */
 }
 
 .comment-input-container {
   display: flex;
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%; /* 使用父容器的全部宽度 */
   gap: 10px;
   align-items: center;
+  margin: 0; /* 移除多余的边距 */
 }
 
 .comment-input-container textarea {
@@ -667,6 +663,7 @@ main {
   border-radius: 4px;
   resize: none;
   min-height: 40px;
+  box-sizing: border-box;
 }
 
 .comment-input-container button {

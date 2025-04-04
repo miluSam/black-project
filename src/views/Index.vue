@@ -5,28 +5,7 @@
 
     <!-- 内容区域 -->
     <main>
-      <div class="left-block">
-        <div class="left-section-top">
-          <div class="community_center"
-          :class="{ active: currentSection === 'community_center' }"
-          @click="currentSection = 'community_center'"
-          >社区中心</div>
-          <div class="creator_center"
-          :class="{ active: currentSection === 'creator_center' }"
-          @click="goToPage('creator-center')"
-          >创作者中心</div>
-          <div class="developer_center"
-          :class="{ active: currentSection === 'developer_center' }"
-          @click="goToPage('developer-center')"
-          >开发者中心</div>
-        </div>
-        <button class="left-section-button" @click="JoinNewPost">
-          +发布内容
-        </button>
-        <div>
-
-        </div>
-      </div>
+      <LeftBlock  />
       <div class="post-wrapper" ref="postWrapper">
         <div class="post-list">
           <!-- 第一个帖子特殊处理 -->
@@ -43,7 +22,7 @@
                 >
                   <img 
                     :src="section.imageUrl" 
-                    alt="游戏图标" 
+                    alt="分区图标" 
                     class="section-icon"
                   >
                   <span class="section-name">{{ section.sectionName }}</span>
@@ -85,27 +64,9 @@
          
         </div>
       </div>
-      <div class="right-block">
-  <div class="hot-posts-title">热门帖子</div>
-  <div class="hot-posts-list">
-    <div v-for="post in hotPosts" :key="post.id" class="hot-post-item">
-      <div class="hot-post-image">
-        <img 
-          :src="post.imageUrl || post.section.imageUrl || 'default-image-url.jpg'" 
-          alt="帖子图片" 
-          class="hot-post-img"
-        />
-      </div>
-      <div class="hot-post-content">
-        <h3>{{ post.title }}</h3>
-        <div class="hot-post-meta">
-          <span class="hot-post-likes">👍 {{ post.likesCount }}</span>
-          <span class="hot-post-comments">💬 {{ post.commentsCount }}</span>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+      <RightBlock 
+        @post-click="handlePostClick"
+      />
     </main>
 
 
@@ -118,9 +79,15 @@ import { defineComponent, ref, onMounted, onBeforeUnmount, computed} from 'vue';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
+import LeftBlock from '../components/LeftBlock.vue';
+import RightBlock from '../components/RightBlock.vue';
 
 export default defineComponent({
   name: 'HomePage',
+  components: {
+    LeftBlock,
+    RightBlock
+  },
   setup() {
     // 数据响应式声明
     const isLoggedIn = ref(false);
@@ -197,16 +164,7 @@ export default defineComponent({
       console.log('点击分区:', section);
       // 这里可以跳转到分区详情页
     };
-// 计算帖子热度
-const hotPosts = computed(() => {
-  return posts.value
-    .map(post => {
-      const heat = (post.likesCount * 0.3) + (post.commentsCount * 0.7); // 计算热度
-      return { ...post, heat }; // 将热度添加到帖子对象中
-    })
-    .sort((a, b) => b.heat - a.heat) // 按热度降序排序
-    .slice(0, 5); // 取前五个帖子
-});
+
     // 获取帖子和游戏数据方法
     const fetchPosts = async () => {
       try {
@@ -362,9 +320,7 @@ const hotPosts = computed(() => {
     };
 
     // 发布新内容方法
-    const JoinNewPost = () => {
-      document.location.href = "#";
-    };
+    
     const currentSection = ref('community_center');
     return {
       isLoggedIn,
@@ -376,7 +332,6 @@ const hotPosts = computed(() => {
       canScrollLeft,
       canScrollRight,
       userInfo,
-hotPosts,
       currentSection,
       captchaImage,
   userCaptcha,
@@ -390,7 +345,6 @@ hotPosts,
       scrollRight,
       scrollLeft,
       updateScrollButtonsVisibility,
-      JoinNewPost,
       goToPage 
       
     };
@@ -797,6 +751,8 @@ main {
 .post-meta span {
   margin-right: 15px;
 }
+
+
 /* 右边块 */
 .right-block {
   width: 350px;

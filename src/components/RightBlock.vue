@@ -3,14 +3,14 @@
     <div class="hot-posts-title">热门帖子</div>
     <div class="hot-posts-list">
       <div 
-        v-for="post in hotPosts" 
+        v-for="post in computedHotPosts" 
         :key="post.id" 
         class="hot-post-item"
         @click="emit('post-click', post.id)"
       >
         <div class="hot-post-image">
           <img 
-            :src="post.imageUrl || post.section?.imageUrl || 'default-image-url.jpg'" 
+            :src="getFirstImage(post)" 
             alt="帖子图片" 
             class="hot-post-img"
           />
@@ -28,17 +28,55 @@
 </template>
 
 <script setup>
-defineProps({
-  hotPosts: {
-    type: Array,
-    default: () => []
-  }
-});
+import { ref, computed, onMounted } from 'vue';
+import axios from 'axios';
+
+
 
 const emit = defineEmits(['post-click']);
+
+// 获取帖子的第一张图片
+const getFirstImage = (post) => {
+  if (post.imageUrl && post.imageUrl.length > 0) {
+    return post.imageUrl[0]; // 返回图片数组的第一张
+  }
+  if (post.section?.imageUrl) {
+    return post.section.imageUrl; // 如果没有帖子图片，返回分区图片
+  }
+  return 'default-image-url.jpg'; // 默认图片
+};
+
+// 获取帖子数据
+const posts = ref([]);
+const fetchPosts = async () => {
+  try {
+    const response = await axios.get('/api/posts');
+    posts.value = response.data;
+  } catch (error) {
+    console.error('获取帖子失败:', error);
+  }
+};
+
+// 计算热门帖子
+const computedHotPosts = computed(() => {
+  return posts.value
+    .map(post => {
+      // 计算热度 (可以根据需要调整权重)
+      const heat = (post.likesCount * 0.3) + (post.commentsCount * 0.7);
+      return { ...post, heat };
+    })
+    .sort((a, b) => b.heat - a.heat) // 按热度降序排序
+    .slice(0, 5); // 只取前5个最热门的帖子
+});
+
+// 组件挂载时获取数据
+onMounted(() => {
+  fetchPosts();
+});
 </script>
 
 <style scoped>
+/* 右边块 */
 .right-block {
   width: 350px;
   height: 500px;
@@ -48,6 +86,7 @@ const emit = defineEmits(['post-click']);
   background-color: #ffffff;
   padding: 20px;
   border-radius: 8px;
+ 
 }
 
 .hot-posts-title {
