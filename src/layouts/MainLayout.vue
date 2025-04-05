@@ -23,7 +23,7 @@
         </div>
       </div>
       <!-- 登录弹窗 -->
-    <div v-if="showLoginPopup" class="login-popup">
+    <div v-if="showLoginPopup"  class="login-popup">
       <div class="popup-content">
         <span class="close" @click="showLoginPopup = false">&times;</span>
         <h2>密码登录</h2>
@@ -82,7 +82,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.js';
 import axios from 'axios'
@@ -99,7 +99,11 @@ const isCaptchaLoading = ref(false)
 const isDropdownVisible = ref(false)
 const searchQuery = ref('');
 
-
+watch(showLoginPopup, (newValue) => {
+  if (newValue) {
+    getCaptcha() // 当弹窗显示时自动获取验证码
+  }
+})
  // 切换下拉菜单方法
  const toggleDropdown = () => {
       isDropdownVisible.value =!isDropdownVisible.value;
