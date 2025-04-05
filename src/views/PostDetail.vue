@@ -63,15 +63,20 @@
       </div>
       
       <!-- 子评论部分 - 添加点击事件 -->
-      <div v-if="comment.childComments && comment.childComments.length" class="replies-container">
-        <div v-for="reply in comment.childComments" 
-             :key="reply.id" 
-             class="reply"
-             @click="setReplyContext(comment.id, reply.user?.id)">
-          <span class="reply-username">{{ reply.user?.username || '匿名用户' }}：</span>
-          <span class="reply-content">{{ reply.commentText }}</span>
-        </div>
-      </div>
+   <!-- 修改后的子评论部分 -->
+<div v-if="comment.childComments && comment.childComments.length" class="replies-container">
+  <div v-for="reply in comment.childComments" 
+       :key="reply.id" 
+       class="reply"
+       @click="setReplyContext(comment.id, reply.user?.id)">
+    <span class="reply-username">{{ reply.user?.username || '匿名用户' }}</span>
+    <template v-if="reply.replyToUser">
+      <span class="reply-to-text">回复</span>
+      <span class="reply-target">@{{ reply.replyToUser.username }}</span>
+    </template>
+    <span class="reply-content">: {{ reply.commentText }}</span>
+  </div>
+</div>
     </div>
   </div>
         </div>
@@ -735,5 +740,34 @@ main {
   background-color: #f0f0f0;
   border-radius: 4px;
   padding: 2px 5px;
+}
+.reply {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 5px 0;
+  color: #666;
+}
+
+.reply-username {
+  font-weight: 500;
+  color: #409EFF;
+  margin-right: 5px;
+}
+
+.reply-to-text {
+  margin: 0 5px;
+  color: #666;
+}
+
+.reply-target {
+  color: #409EFF;
+  margin-right: 5px;
+}
+
+.reply-content {
+  word-break: break-word;
 }
 </style>
