@@ -1,24 +1,32 @@
-
 <template>
   <div class="main-layout">
     <!-- 头部 -->
     <header class="header">
-      <div class="logo">
-        <img src="https://blackbox-web.oss-cn-wuhan-lr.aliyuncs.com/blackbox.png" alt="Logo" />
+      <!-- Left Section Wrapper -->
+      <div class="header-section left">
+        <div class="logo">
+          <img src="https://blackbox-web.oss-cn-wuhan-lr.aliyuncs.com/blackbox.png" alt="Logo" />
+        </div>
       </div>
+
+      <!-- Center Section (Search Bar) -->
       <div class="search-bar">
         <input type="text" v-model="searchQuery" placeholder="搜索帖子/游戏" />
         <i class="el-icon-search" @click="search"></i>
       </div>
-      <div class="login">
-        <!-- 根据登录状态显示登录按钮或用户头像和用户名 -->
-        <button v-if="!isLoggedIn" @click="showLoginPopup = true">登录</button>
-        <div v-if="isLoggedIn" class="userinfo" @click="toggleDropdown">
-          <img :src="userInfo.avatar" alt="用户头像" class="avatar" />
-          <span class="username">{{ userInfo.username }}</span>
-          <div v-if="isDropdownVisible" class="dropdown">
-            <div class="dropdown-item" @click="goToPage(('UserCenter'))">用户中心</div>
-            <div class="dropdown-item" @click="handleLogout">退出登录</div>
+
+      <!-- Right Section Wrapper -->
+      <div class="header-section right">
+        <div class="login">
+          <!-- 根据登录状态显示登录按钮或用户头像和用户名 -->
+          <button v-if="!isLoggedIn" @click="showLoginPopup = true">登录</button>
+          <div v-if="isLoggedIn" class="userinfo" @click="toggleDropdown">
+            <img :src="userInfo.avatar" alt="用户头像" class="avatar" />
+            <span class="username">{{ userInfo.username }}</span>
+            <div v-if="isDropdownVisible" class="dropdown">
+              <div class="dropdown-item" @click="goToPage(('UserCenter'))">用户中心</div>
+              <div class="dropdown-item" @click="handleLogout">退出登录</div>
+            </div>
           </div>
         </div>
       </div>
@@ -56,7 +64,7 @@
         {{ isCaptchaLoading ? '加载中...' : '刷新验证码' }}
       </button>
     </div>
-        <button @click="handleLogin">登录</button>
+        <button  @click="handleLogin">登录</button>
         <button @click="handleRegister">注册</button>
       </div>
     </div>
@@ -213,8 +221,6 @@ body {
   height: 65px;
   display: flex;
   align-items: center;
-  padding: 0 10px;
-  justify-content: space-between;
   position: fixed;
   top: 0;
   left: 0;
@@ -223,28 +229,45 @@ body {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
+/* New Header Section Wrappers */
+.header-section {
+  display: flex;
+  align-items: center;
+  flex: 1 0 0; /* Let left and right sections take equal space */
+}
+
+.header-section.left {
+  justify-content: flex-start; /* Align logo to the left within its section */
+  padding-left: 200px; /* Add padding to push logo from edge */
+}
+
+.header-section.right {
+  justify-content: flex-end; /* Align login to the right within its section */
+  padding-right: 200px; /* Add padding to push login from edge */
+}
+
 .logo img {
-  margin-left: 320px;
   height: 26px;
   width: auto;
+  display: block; /* Added previously, keep it */
 }
 
 .search-bar {
-  flex-grow: 1;
-  margin: auto;
-  margin-left: 130px;
-  max-width: 600px;
+  max-width: 610px; /* Use max-width to constrain */
+  width: 610px; /* Or fixed width as original */
+  margin: 0 20px; /* Add some margin to prevent touching sections */
+  flex-shrink: 0; /* Prevent shrinking if space is tight */
   position: relative;
-  
 }
 
 .search-bar input {
-  width: 610px;
+  width: 100%; /* Input takes width of .search-bar container */
   padding: 12px 30px 12px 15px;
   border-radius: 8px;
   border: none;
   border: 1px solid #c9ced2;
   background-color: #fafbfc;
+  box-sizing: border-box;
 }
 
 .search-bar input:focus {
@@ -253,16 +276,16 @@ body {
 
 .search-bar i {
   position: absolute;
-  right: -40px;
+  right: 15px; /* Adjusted from -40px to be inside padding */
   top: 50%;
   transform: translateY(-50%);
   cursor: pointer;
+  color: #909399; /* Added previously */
 }
 
 .login {
-  position: absolute;
-  right: 320px; /* 根据实际布局调整 */
-  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
 }
 
 .login button {
@@ -270,13 +293,12 @@ body {
   color: white;
   padding: 10px 15px;
   border: none;
-  border-radius: 8px ; 
+  border-radius: 8px ;
   cursor: pointer;
   height: 35px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 100px;
 }
 
 .login button:hover {
@@ -285,10 +307,6 @@ body {
 .userinfo {
   display: flex;
   align-items: center;
-  /* position: absolute; */
-  /* right: 1320px; 根据实际布局调整 */
-  /* margin-top: -10px;
-  transform: translateX(-50%); */
   position: relative;
 }
 .avatar {
@@ -303,6 +321,7 @@ body {
   font-weight: 500;
   color: #333;
   font-size: 14px;
+  white-space: nowrap; /* Added previously */
 }
 /* 登录弹窗样式 */
 .login-popup {
