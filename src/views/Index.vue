@@ -9,15 +9,18 @@
       <div class="post-wrapper" ref="postWrapper">
         <div class="post-list">
           <!-- 第一个帖子特殊处理 -->
-          <div class="post-item">
+          <div class="post-item" ref="firstPostItem">
+            <!-- 左右渐变区域 -->
             <div class="scroll-indicator left" @click="scrollLeft" v-if="canScrollLeft"></div>
             <div class="scroll-indicator right" @click="scrollRight" v-if="canScrollRight"></div>
+            
             <div class="section-list-container">
               <div class="section-list-scroll" ref="sectionListScroll">
                 <div 
                   v-for="section in sections" 
                   :key="section.id" 
                   class="section-item"
+                  :class="{ 'active': selectedSection && selectedSection.id === section.id }"
                   @click="handlesectionClick(section)"
                 >
                   <img 
@@ -28,6 +31,19 @@
                   <span class="section-name">{{ section.sectionName }}</span>
                 </div>
               </div>
+            </div>
+            
+            <!-- 显示当前筛选/搜索状态 -->
+            <div v-if="selectedSection || searchKeyword" class="filter-status">
+              <div class="status-text">
+                <template v-if="selectedSection">
+                  当前显示: {{ selectedSection.sectionName }} 分区
+                </template>
+                <template v-else-if="searchKeyword">
+                  搜索结果: "{{ searchKeyword }}"
+                </template>
+              </div>
+              <button class="reset-button" @click="fetchPosts">重置</button>
             </div>
           </div>
           <!-- 从第二个帖子开始展示posts数据 -->
@@ -91,9 +107,9 @@
 </template>
 
 <script>
-import { defineComponent, ref, onMounted, onBeforeUnmount, computed} from 'vue';
+import { defineComponent, ref, onMounted, onBeforeUnmount, computed, watch } from 'vue';
 import axios from 'axios';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import LeftBlock from '../components/LeftBlock.vue';
 import RightBlock from '../components/RightBlock.vue';
@@ -105,6 +121,10 @@ export default defineComponent({
     RightBlock
   },
   setup() {
+    // 首先初始化路由相关变量
+    const router = useRouter();
+    const route = useRoute();
+    
     // 数据响应式声明
     const isLoggedIn = ref(false);
     const authStore = useAuthStore();
@@ -114,6 +134,8 @@ export default defineComponent({
     const isLoading = ref(false);
     const isLastPage = ref(false);
     const totalPages = ref(1);
+    const selectedSection = ref(null); // 当前选中的section
+    const searchKeyword = ref(''); // 搜索关键词
 
     const username = ref('');
     const password = ref('');
@@ -136,18 +158,37 @@ export default defineComponent({
       // 检查JWT令牌是否过期
       checkJwtExpiration();
       
-      fetchPosts();
+      // 检查URL参数是否包含搜索请求
+      if (route.query.search === 'true' && route.query.keyword) {
+        searchKeyword.value = route.query.keyword;
+        fetchSearchResults(route.query.keyword);
+      } else {
+        fetchPosts(); // 否则加载常规帖子
+      }
 
       // 添加全局滚轮事件监听
       window.addEventListener('wheel', handleGlobalScroll);
 
-      // 确保DOM更新后执行
+      // 添加section滚动事件监听
       setTimeout(() => {
-        const postWrapper = document.querySelector('.post-wrapper');
-        if (postWrapper) {
-          postWrapper.scrollLeft = 100; // 设置 scrollLeft 属性
-          postWrapper.scrollTop = 0;
+        const sectionListScroll = document.querySelector('.section-list-scroll');
+        if (sectionListScroll) {
+          sectionListScroll.addEventListener('scroll', () => {
+            updateScrollButtonsVisibility();
+          });
         }
+        
+        // 确保DOM更新后执行
+        setTimeout(() => {
+          const postWrapper = document.querySelector('.post-wrapper');
+          if (postWrapper) {
+            postWrapper.scrollLeft = 100; // 设置 scrollLeft 属性
+            postWrapper.scrollTop = 0;
+          }
+          
+          // 初始化时检查滚动按钮状态
+          updateScrollButtonsVisibility();
+        }, 100);
       }, 0);
     });
 
@@ -185,9 +226,9 @@ export default defineComponent({
       // 移除全局滚轮事件监听
       window.removeEventListener('wheel', handleGlobalScroll);
 
+      // 移除section滚动事件监听
       const sectionListScroll = document.querySelector('.section-list-scroll');
       if (sectionListScroll) {
-        // 移除滚动事件监听
         sectionListScroll.removeEventListener('scroll', updateScrollButtonsVisibility);
       }
     });
@@ -198,12 +239,29 @@ export default defineComponent({
       return posts.value;
     });
     
+    // 监听路由变化，处理搜索请求
+    watch(() => route.query, (newQuery) => {
+      if (newQuery.search === 'true' && newQuery.keyword) {
+        searchKeyword.value = newQuery.keyword;
+        fetchSearchResults(newQuery.keyword);
+        selectedSection.value = null; // 清除之前选中的section
+      }
+    }, { deep: true });
+    
     // 加载更多帖子
     const loadMorePosts = async () => {
       if (isLoading.value || isLastPage.value) return;
       
       currentPage.value++;
-      await fetchPosts(false);
+      
+      // 根据当前模式决定加载什么内容
+      if (selectedSection.value) {
+        await fetchPostsBySection(selectedSection.value.id, false);
+      } else if (searchKeyword.value) {
+        await fetchSearchResults(searchKeyword.value, false);
+      } else {
+        await fetchPosts(false);
+      }
     };
 
 
@@ -223,11 +281,13 @@ export default defineComponent({
     // 点击分区处理方法
     const handlesectionClick = (section) => {
       console.log('点击分区:', section);
-      // 这里可以跳转到分区详情页
+      selectedSection.value = section;
+      searchKeyword.value = ''; // 清除搜索关键词
+      fetchPostsBySection(section.id);
     };
 
-    // 获取帖子数据方法
-    const fetchPosts = async (reset = true) => {
+    // 根据section获取帖子
+    const fetchPostsBySection = async (sectionId, reset = true) => {
       try {
         isLoading.value = true;
         
@@ -244,13 +304,14 @@ export default defineComponent({
             'Authorization': `Bearer ${jwtToken}`
           },
           params: {
+            sectionId: sectionId,
             pageNum: currentPage.value,
             pageSize: 10
           }
         };
         
-        // 获取帖子数据
-        const postsResponse = await axios.get('http://localhost:7070/api/posts/page', config);
+        // 获取特定分区的帖子数据
+        const postsResponse = await axios.get('http://localhost:7070/api/posts/filter', config);
         const pageData = postsResponse.data;
         const newPosts = pageData.records || [];
         
@@ -279,7 +340,6 @@ export default defineComponent({
         setTimeout(() => {
           const container = document.querySelector('.section-list-scroll');
           if (container) {
-            container.scrollLeft = 0;
             // 立即更新按钮状态
             updateScrollButtonsVisibility();
 
@@ -307,13 +367,71 @@ export default defineComponent({
           }
         }, 0);
       } catch (error) {
-        console.error('数据获取失败:', error);
+        console.error('获取分区帖子失败:', error);
       } finally {
         isLoading.value = false;
       }
     };
     
-    const router = useRouter(); // 引入路由
+    // 搜索帖子方法
+    const fetchSearchResults = async (keyword, reset = true) => {
+      try {
+        isLoading.value = true;
+        
+        if (reset) {
+          // 重置数据
+          posts.value = [];
+          currentPage.value = 1;
+          isLastPage.value = false;
+        }
+        
+        const jwtToken = sessionStorage.getItem('jwtToken');
+        const config = {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`
+          },
+          params: {
+            keyword: keyword,
+            pageNum: currentPage.value,
+            pageSize: 10
+          }
+        };
+        
+        // 获取搜索结果
+        const postsResponse = await axios.get('http://localhost:7070/api/posts/search', config);
+        const pageData = postsResponse.data;
+        const newPosts = pageData.records || [];
+        
+        // 更新总页数
+        totalPages.value = pageData.pages || 1;
+        
+        // 判断是否是最后一页
+        if (currentPage.value >= totalPages.value || newPosts.length === 0 || !authStore.isLoggedIn) {
+          isLastPage.value = true;
+        }
+        
+        // 添加新帖子到列表
+        if (reset) {
+          posts.value = newPosts;
+        } else {
+          posts.value = [...posts.value, ...newPosts];
+        }
+        
+        // 在这里添加DOM更新代码以更新滚动按钮可见性，但不重置滚动位置
+        setTimeout(() => {
+          const container = document.querySelector('.section-list-scroll');
+          if (container) {
+            // 不重置滚动位置
+            updateScrollButtonsVisibility();
+          }
+        }, 0);
+      } catch (error) {
+        console.error('搜索帖子失败:', error);
+      } finally {
+        isLoading.value = false;
+      }
+    };
+    
     const goToPage = (path) => {
             // 假设你还想管理当前激活的项，可保留这行代码来更新状态
             // 如果你不需要管理激活状态，这行代码可以省略
@@ -371,17 +489,24 @@ export default defineComponent({
 
       // 确保滚动位置不会超出最大滚动范围
       const targetScrollLeft = Math.min(container.scrollLeft + scrollAmount, maxScrollPosition);
+      
       container.scrollTo({
         left: targetScrollLeft,
         behavior: 'smooth'
       });
 
-      // 异常捕获以确保按钮可见性更新的安全性
-      try {
+      // 强制直接更新按钮状态
+      setTimeout(() => {
+        // 检查是否已滚动到最右端
+        if (Math.abs(container.scrollLeft + container.clientWidth - container.scrollWidth) < 10) {
+          canScrollRight.value = false;
+          const firstPostItem = document.querySelector('.post-item:first-child');
+          if (firstPostItem) {
+            firstPostItem.style.setProperty('--show-right', 'none');
+          }
+        }
         updateScrollButtonsVisibility();
-      } catch (error) {
-        console.error('Failed to update scroll buttons visibility:', error);
-      }
+      }, 300); // 等待滚动动画完成
     };
 
     // 向左滚动方法
@@ -390,12 +515,25 @@ export default defineComponent({
       if (!container) return;
 
       const scrollAmount = 200;
+      const targetScrollLeft = Math.max(container.scrollLeft - scrollAmount, 0);
+      
       container.scrollTo({
-        left: container.scrollLeft - scrollAmount,
+        left: targetScrollLeft,
         behavior: 'smooth'
       });
 
-      updateScrollButtonsVisibility();
+      // 强制直接更新按钮状态
+      setTimeout(() => {
+        // 检查是否已滚动到最左端
+        if (container.scrollLeft < 10) {
+          canScrollLeft.value = false;
+          const firstPostItem = document.querySelector('.post-item:first-child');
+          if (firstPostItem) {
+            firstPostItem.style.setProperty('--show-left', 'none');
+          }
+        }
+        updateScrollButtonsVisibility();
+      }, 300); // 等待滚动动画完成
     };
 
     // 更新滚动按钮可见性方法
@@ -403,15 +541,31 @@ export default defineComponent({
       const container = document.querySelector('.section-list-scroll');
       if (!container) return;
 
-      canScrollLeft.value = container.scrollLeft > 0;
-      canScrollRight.value = container.scrollLeft + container.clientWidth < container.scrollWidth;
+      // 检查是否可以向左滚动（当前滚动位置大于0）
+      canScrollLeft.value = container.scrollLeft > 5; // 添加一个小的阈值，更精确地判断
 
-      // 获取第一个帖子元素并设置CSS变量
+      // 检查是否可以向右滚动（当前滚动位置 + 容器宽度 < 内容总宽度）
+      // 添加小的阈值以确保准确检测到末尾
+      canScrollRight.value = container.scrollLeft + container.clientWidth < container.scrollWidth - 5;
+
+      // 获取第一个帖子元素并更新类名
       const firstPostItem = document.querySelector('.post-item:first-child');
       if (firstPostItem) {
-        firstPostItem.style.setProperty('--show-left', canScrollLeft.value? 'block' : 'none');
-        firstPostItem.style.setProperty('--show-right', canScrollRight.value? 'block' : 'none');
+        // 使用类名控制伪元素显示
+        if (canScrollLeft.value) {
+          firstPostItem.classList.add('can-scroll-left');
+        } else {
+          firstPostItem.classList.remove('can-scroll-left');
+        }
+        
+        if (canScrollRight.value) {
+          firstPostItem.classList.add('can-scroll-right');
+        } else {
+          firstPostItem.classList.remove('can-scroll-right');
+        }
       }
+      
+      console.log(`Scroll status: Left=${canScrollLeft.value}, Right=${canScrollRight.value}`);
     };
 
     // 发布新内容方法
@@ -474,6 +628,94 @@ export default defineComponent({
       }
     };
 
+    // 获取帖子数据方法 (修改原有方法)
+    const fetchPosts = async (reset = true) => {
+      try {
+        isLoading.value = true;
+        
+        if (reset) {
+          // 重置数据
+          posts.value = [];
+          currentPage.value = 1;
+          isLastPage.value = false;
+          selectedSection.value = null; // 重置选中的section
+          searchKeyword.value = ''; // 重置搜索关键词
+        }
+        
+        const jwtToken = sessionStorage.getItem('jwtToken');
+        const config = {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`
+          },
+          params: {
+            pageNum: currentPage.value,
+            pageSize: 10
+          }
+        };
+        
+        // 获取帖子数据
+        const postsResponse = await axios.get('http://localhost:7070/api/posts/page', config);
+        const pageData = postsResponse.data;
+        const newPosts = pageData.records || [];
+        
+        // 获取分区数据（只在第一次加载时获取）
+        if (reset || sections.value.length === 0) {
+          const sectionsResponse = await axios.get('http://localhost:7070/api/sections', config);
+          sections.value = sectionsResponse.data;
+        }
+        
+        // 更新总页数
+        totalPages.value = pageData.pages || 1;
+        
+        // 判断是否是最后一页
+        if (currentPage.value >= totalPages.value || newPosts.length === 0 || !authStore.isLoggedIn) {
+          isLastPage.value = true;
+        }
+        
+        // 添加新帖子到列表
+        if (reset) {
+          posts.value = newPosts;
+        } else {
+          posts.value = [...posts.value, ...newPosts];
+        }
+
+        // 确保DOM更新后执行
+        setTimeout(() => {
+          const container = document.querySelector('.section-list-scroll');
+          if (container) {
+            // 立即更新按钮状态
+            updateScrollButtonsVisibility();
+
+            // 添加图片加载完成的检测
+            const images = container.getElementsByTagName('img');
+            let loadedCount = 0;
+
+            Array.from(images).forEach(img => {
+              if (img.complete) {
+                loadedCount++;
+              } else {
+                img.onload = () => {
+                  loadedCount++;
+                  if (loadedCount === images.length) {
+                    updateScrollButtonsVisibility();
+                  }
+                };
+              }
+            });
+
+            // 如果所有图片已经加载完成
+            if (loadedCount === images.length) {
+              updateScrollButtonsVisibility();
+            }
+          }
+        }, 0);
+      } catch (error) {
+        console.error('数据获取失败:', error);
+      } finally {
+        isLoading.value = false;
+      }
+    };
+
     return {
       isLoggedIn,
       authStore,
@@ -503,7 +745,9 @@ export default defineComponent({
       scrollLeft,
       updateScrollButtonsVisibility,
       goToPage,
-      handleLike
+      handleLike,
+      selectedSection,
+      searchKeyword
     };
   }
 });
@@ -744,9 +988,8 @@ main {
   right: 0;
 }
 
-/* 悬浮箭头 */
-/* 修正后的悬浮箭头样式 */
-.post-item:first-child:hover::before {
+/* 悬浮箭头 - 修改为使用CSS变量控制显示/隐藏 */
+.post-item:first-child::before {
   content: ">";
   position: absolute;
   right: 8px;
@@ -754,11 +997,12 @@ main {
   transform: translateY(-50%);
   color: #409EFF;
   font-weight: bold;
-  z-index: 1;
+  z-index: 5;
+  display: none; /* 默认隐藏 */
   animation: arrowSlide 0.5s;
 }
 
-.post-item:first-child:hover::after {
+.post-item:first-child::after {
   content: "<";
   position: absolute;
   left: 8px;
@@ -766,17 +1010,18 @@ main {
   transform: translateY(-50%);
   color: #409EFF;
   font-weight: bold;
-  z-index: 1;
+  z-index: 5;
+  display: none; /* 默认隐藏 */
   animation: arrowSlideLeft 0.5s;
 }
-@keyframes arrowSlide {
-  from { right: -20px; }
-  to { right: 8px; }
+
+/* 当可滚动时显示箭头 */
+.post-item:first-child.can-scroll-right::before {
+  display: block;
 }
 
-@keyframes arrowSlideLeft {
-  from { left: -20px; }
-  to { left: 8px; }
+.post-item:first-child.can-scroll-left::after {
+  display: block;
 }
 
 .post-item h2 {
@@ -1017,5 +1262,41 @@ main {
   color: #999;
   font-size: 14px;
   font-style: italic;
+}
+
+/* 当前分区高亮样式 */
+.section-item.active {
+  background-color: #f0f7ff;
+  border: 1px solid #409EFF;
+}
+
+/* 筛选状态提示 */
+.filter-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 10px 0;
+  padding: 8px 15px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+}
+
+.status-text {
+  font-size: 14px;
+  color: #606266;
+}
+
+.reset-button {
+  background-color: #409EFF;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.reset-button:hover {
+  background-color: #66b1ff;
 }
 </style>    

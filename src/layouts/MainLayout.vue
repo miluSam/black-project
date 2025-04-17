@@ -11,7 +11,7 @@
 
       <!-- Center Section (Search Bar) -->
       <div class="search-bar">
-        <input type="text" v-model="searchQuery" placeholder="搜索帖子/游戏" />
+        <input type="text" v-model="searchQuery" placeholder="搜索帖子/游戏" @keyup.enter="search" />
         <i class="el-icon-search" @click="search"></i>
       </div>
 
@@ -120,9 +120,20 @@ watch(showLoginPopup, (newValue) => {
 
   // 搜索方法
   const search = () => {
-      console.log('搜索内容:', searchQuery.value);
-      // 在这里可以根据 `searchQuery` 执行搜索逻辑
-    };
+    if (!searchQuery.value.trim()) return;
+    
+    // 保存搜索关键词到localStorage以便首页获取
+    localStorage.setItem('searchKeyword', searchQuery.value);
+    
+    // 跳转到首页并带上搜索标识
+    router.push({ 
+      path: '/', 
+      query: { 
+        search: 'true',
+        keyword: searchQuery.value
+      } 
+    });
+  };
 // 注册方法
 const handleRegister = () => {
       console.log('执行注册操作');
