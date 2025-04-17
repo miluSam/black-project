@@ -55,7 +55,9 @@
             <div class="post-meta">
               <span class="post-time">{{ formatDate(post.postDate) }}</span>
               <div class="interaction">
-                <span class="likes">👍 {{ post.likesCount }}</span>
+                <span class="likes" @click.stop="handleLike(post)">
+                  👍 {{ post.likesCount }}
+                </span>
                 <span class="comments">💬 {{ post.commentsCount }}</span>
               </div>
             </div>
@@ -418,6 +420,60 @@ export default defineComponent({
     const goToUserProfile = (userId) => {
       router.push(`/user/${userId}`);
     };
+
+    const handleLike = async (post) => {
+      if (!authStore.isLoggedIn) {
+        // 未登录时，提示用户登录
+        alert('请先登录');
+        return;
+      }
+      
+      try {
+        // 检查是否已点赞
+        const checkResponse = await axios.get(`/posts/likes/check`, {
+          params: {
+            postId: post.id,
+            userId: authStore.userInfo.id
+          },
+          headers: {
+            Authorization: `Bearer ${authStore.userInfo.token}`
+          }
+        });
+        
+        const isLiked = checkResponse.data.data || false;
+        
+        const requestData = {
+          postId: post.id,
+          userId: authStore.userInfo.id
+        };
+        
+        if (isLiked) {
+          // 已点赞，执行取消点赞
+          await axios.post(`/posts/likes/remove`, requestData, {
+            headers: {
+              Authorization: `Bearer ${authStore.userInfo.token}`
+            }
+          });
+          
+          // 更新点赞数
+          post.likesCount = Math.max(0, post.likesCount - 1);
+        } else {
+          // 未点赞，执行点赞
+          await axios.post(`/posts/likes/add`, requestData, {
+            headers: {
+              Authorization: `Bearer ${authStore.userInfo.token}`
+            }
+          });
+          
+          // 更新点赞数
+          post.likesCount++;
+        }
+      } catch (error) {
+        console.error('点赞操作失败:', error);
+        alert('操作失败，请稍后再试');
+      }
+    };
+
     return {
       isLoggedIn,
       authStore,
@@ -446,7 +502,8 @@ export default defineComponent({
       scrollRight,
       scrollLeft,
       updateScrollButtonsVisibility,
-      goToPage 
+      goToPage,
+      handleLike
     };
   }
 });

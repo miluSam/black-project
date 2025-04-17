@@ -12,10 +12,10 @@
         @click="goToPage('creator-center')"
       >创作者中心</div>
       <div 
-        class="developer_center"
-        :class="{ active: currentSection === 'developer_center' }"
-        @click="goToPage('developer-center')"
-      >开发者中心</div>
+        class="content_management"
+        :class="{ active: currentSection === 'content_management' }"
+        @click="goToPage('content-management')"
+      >内容管理</div>
     </div>
     <button class="left-section-button" @click="goToPage('creator-center')">
       +发布内容
@@ -24,12 +24,25 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 
 const router = useRouter();
-const currentSection = ref('index_center');
+const route = useRoute();
 
+// 根据当前路由路径计算激活的导航项
+const currentSection = computed(() => {
+  const path = route.path;
+  if (path.includes('creator-center')) {
+    return 'creator_center';
+  } else if (path.includes('content-management')) {
+    return 'content_management';
+  } else if (path.includes('post-detail')) {
+    return 'post_detail';
+  } else {
+    return 'index_center';
+  }
+});
 
 const goToPage = (path) => {
   router.push({ path: `/${path}` })

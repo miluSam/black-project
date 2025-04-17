@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Index from '../views/Index.vue'// 假设你有一个 Home 组件作为首页
 import CreatorCenter from '../views/CreatorCenter.vue';
-import DeveloperCenter from '../views/DeveloperCenter.vue';
+import ContentManagement from '../views/ContentManagement.vue';
 import UserCenter from '../views/UserCenter.vue';
 import MainLayout from '../layouts/MainLayout.vue'
 import PostDetail from '../views/PostDetail.vue';
@@ -24,9 +24,9 @@ const routes = [
                 meta: { requiresAuth: true } // 需要登录
             },
             {
-                path: '/developer-center',
-                name: 'DeveloperCenter',
-                component: DeveloperCenter,
+                path: '/content-management',
+                name: 'ContentManagement',
+                component: ContentManagement,
                 meta: { requiresAuth: true } // 需要登录
             },
             {

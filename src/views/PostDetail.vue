@@ -46,6 +46,17 @@
     </div>
   </div>
           
+  <!-- 点赞与评论显示区域 -->
+  <div class="post-actions">
+    <div class="like-button" @click="toggleLike" :class="{ 'liked': isLiked }">
+      <i class="like-icon">👍</i>
+      <span>{{ post.likesCount }}</span>
+    </div>
+    <div class="comment-count">
+      <i class="comment-icon">💬</i>
+      <span>{{ post.commentsCount }}</span>
+    </div>
+  </div>
         <!-- 评论区域 -->
   <div class="comments-section">
     <h3>评论 ({{ post.commentsCount }})</h3>
@@ -94,12 +105,22 @@
       </div>
     </div>
     
+    <!-- 上下文菜单 -->
+    <div v-if="contextMenu.visible" 
+         class="context-menu" 
+         :style="{top: `${contextMenu.y}px`, left: `${contextMenu.x}px`}"
+         @click.stop>
+      <div class="menu-item delete" @click="deleteComment(contextMenu.commentId)">
+        <i class="el-icon-delete"></i> 删除评论
+      </div>
+    </div>
+    
   </div>
   
 </template>
 
 <script>
-import { defineComponent, ref, onMounted, computed } from 'vue';
+import { defineComponent, ref, onMounted, computed, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import { useAuthStore } from '../stores/auth.js';
@@ -117,22 +138,41 @@ export default defineComponent({
     const transitionName = ref('slide-next');
     const comments = ref([]);
     const authStore = useAuthStore();
+    const isLiked = ref(false);
     const replyContext = ref({
-  parentCommentId: null,
-  replyToUserId: null
-});
-//右键展示删除菜单
-
-// 设置回复上下文的方法
-const setReplyContext = (parentId, replyUserId) => {
-  replyContext.value = {
-    parentCommentId: parentId,
-    replyToUserId: replyUserId
-  };
-  // 自动聚焦输入框（可选）
-  document.querySelector('.fixed-comment-input textarea')?.focus();
-};
+      parentCommentId: null,
+      replyToUserId: null
+    });
     
+    // 添加上下文菜单状态
+    const contextMenu = ref({
+      visible: false,
+      x: 0,
+      y: 0,
+      commentId: null
+    });
+    
+    // 关闭上下文菜单
+    const closeContextMenu = () => {
+      contextMenu.value.visible = false;
+    };
+    
+    // 点击文档其他地方时关闭上下文菜单
+    const handleDocumentClick = () => {
+      if (contextMenu.value.visible) {
+        closeContextMenu();
+      }
+    };
+    
+    onMounted(() => {
+      fetchPostDetail();
+      document.addEventListener('click', handleDocumentClick);
+    });
+    
+    onBeforeUnmount(() => {
+      document.removeEventListener('click', handleDocumentClick);
+    });
+
     const hotPosts = computed(() => {
       if (!post.value || !post.value.relatedPosts) return [];
       return post.value.relatedPosts.slice(0, 5);
@@ -162,7 +202,7 @@ const setReplyContext = (parentId, replyUserId) => {
 
         if (!jwtToken) {
           console.error('未找到认证令牌');
-    return;
+          return;
         }
 
         const response = await axios.get('/api/post-detail', {
@@ -174,6 +214,9 @@ const setReplyContext = (parentId, replyUserId) => {
 
         if (!response.data) throw new Error('无效的响应数据');
         post.value = response.data;
+        
+        // 获取帖子详情后检查当前用户是否已点赞
+        await checkLikeStatus();
       } catch (err) {
         error.value = err.response?.data?.message || err.message || '获取帖子详情失败';
         console.error('Error details:', err);
@@ -266,7 +309,128 @@ const sendComment = async () => {
       return new Date(dateStr).toLocaleDateString('zh-CN', options);
     };
 
-    onMounted(fetchPostDetail);
+    // 检查当前用户是否已点赞该帖子
+    const checkLikeStatus = async () => {
+      if (!authStore.isLoggedIn || !post.value) return;
+      
+      try {
+        const response = await axios.get(`/api/posts/likes/check`, {
+          params: {
+            postId: post.value.id,
+            userId: authStore.userInfo.id
+          },
+          headers: {
+            Authorization: `Bearer ${authStore.userInfo.token}`
+          }
+        });
+        
+        // 根据后端返回结构调整
+        isLiked.value = response.data.data || false;
+      } catch (error) {
+        console.error('检查点赞状态失败:', error);
+      }
+    };
+
+    // 切换点赞状态
+    const toggleLike = async () => {
+      if (!authStore.isLoggedIn) {
+        ElMessage.error('请先登录');
+        return;
+      }
+      
+      try {
+        const requestData = {
+          postId: post.value.id,
+          userId: authStore.userInfo.id
+        };
+        
+        if (isLiked.value) {
+          // 取消点赞 - 使用POST方法和正确的路径
+          await axios.post(`/api/posts/likes/remove`, requestData, {
+            headers: {
+              Authorization: `Bearer ${authStore.userInfo.token}`
+            }
+          });
+          
+          post.value.likesCount = Math.max(0, post.value.likesCount - 1);
+          isLiked.value = false;
+          ElMessage.success('已取消点赞');
+        } else {
+          // 添加点赞 - 使用POST方法和正确的路径
+          await axios.post(`/api/posts/likes/add`, requestData, {
+            headers: {
+              Authorization: `Bearer ${authStore.userInfo.token}`
+            }
+          });
+          
+          post.value.likesCount++;
+          isLiked.value = true;
+          ElMessage.success('点赞成功');
+        }
+      } catch (error) {
+        console.error('点赞操作失败:', error);
+        ElMessage.error('操作失败，请稍后再试');
+      }
+    };
+
+    // 显示上下文菜单
+    const showDeleteMenu = (event, commentId) => {
+      // 阻止默认右键菜单
+      event.preventDefault();
+      
+      // 只有当评论是当前用户发布的，或者当前用户是管理员时才允许删除
+      if (!authStore.isLoggedIn) return;
+      
+      const isCommentOwner = post.value.comments.some(comment => 
+        comment.id === commentId && comment.user?.id === authStore.userInfo.id
+      );
+      
+      const isAdmin = authStore.userInfo.role === 'ADMIN';
+      
+      if (isCommentOwner || isAdmin) {
+        // 显示上下文菜单
+        contextMenu.value.x = event.clientX;
+        contextMenu.value.y = event.clientY;
+        contextMenu.value.commentId = commentId;
+        contextMenu.value.visible = true;
+        event.stopPropagation(); // 阻止事件冒泡
+      }
+    };
+
+    // 执行删除评论的操作
+    const deleteComment = async (commentId) => {
+      try {
+        const response = await axios.delete(`${import.meta.env.VITE_API_URL}/comments/${commentId}`, {
+          headers: {
+            Authorization: `Bearer ${authStore.userInfo?.token || localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken')}`
+          }
+        });
+        
+        if (response.status === 200) {
+          // 更新评论列表
+          post.value.comments = post.value.comments.filter(comment => comment.id !== commentId);
+          // 显示成功消息
+          ElMessage.success('评论已成功删除');
+          // 关闭上下文菜单
+          closeContextMenu();
+        }
+      } catch (error) {
+        console.error('删除评论失败:', error);
+        ElMessage.error(error.response?.data?.message || '删除评论失败');
+        // 关闭上下文菜单
+        closeContextMenu();
+      }
+    };
+
+    // 设置回复上下文的方法
+    const setReplyContext = (parentId, replyUserId) => {
+      replyContext.value = {
+        parentCommentId: parentId,
+        replyToUserId: replyUserId
+      };
+      // 自动聚焦输入框（可选）
+      document.querySelector('.fixed-comment-input textarea')?.focus();
+    };
 
     return { 
       post, 
@@ -275,12 +439,18 @@ const sendComment = async () => {
       currentImageIndex,
       hotPosts,
       newComment,
+      contextMenu,
+      closeContextMenu,
       setReplyContext,
       fetchComments,
       nextImage,
       prevImage,
       sendComment,
-      formatDate 
+      formatDate,
+      toggleLike,
+      checkLikeStatus,
+      showDeleteMenu,
+      deleteComment
     };
   }
 });
@@ -769,5 +939,66 @@ main {
 
 .reply-content {
   word-break: break-word;
+}
+
+/* 添加点赞和评论计数区域样式 */
+.post-actions {
+  display: flex;
+  margin-top: 20px;
+  border-top: 1px solid #eee;
+  padding-top: 15px;
+  gap: 20px;
+}
+
+.like-button, .comment-count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #666;
+}
+
+.like-button {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.like-button:hover {
+  color: #409EFF;
+}
+
+.like-button.liked {
+  color: #409EFF;
+}
+
+.like-icon, .comment-icon {
+  font-size: 18px;
+}
+
+/* 上下文菜单样式 */
+.context-menu {
+  position: fixed;
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 100px;
+}
+
+.menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu-item:hover {
+  background-color: #f5f7fa;
+}
+
+.menu-item.delete {
+  color: #f56c6c;
 }
 </style>
