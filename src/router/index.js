@@ -40,6 +40,11 @@ const routes = [
                 name: 'PostDetail',
                 component: PostDetail,
 
+            },
+            {
+                path: '/user/:userId',
+                name: 'UserProfile',
+                component: () => import('../views/UserProfile.vue')
             }
         ]
     }
@@ -54,7 +59,7 @@ router.beforeEach((to, from, next) => {
     const authStore = useAuthStore();
     authStore.initializeFromStorage();
     const token = localStorage.getItem('jwtToken');
-    
+
     if (to.meta.requiresAuth && (!authStore.isLoggedIn || !token)) {
         ElMessage.warning('请先登录以访问此页面');
         next({ name: 'Index' });

@@ -33,33 +33,47 @@
           <!-- 从第二个帖子开始展示posts数据 -->
           <div @click="handlePostClick(post.id)" v-for="post in displayedPosts" :key="post.id" class="post-item">
             <div class="user-info">
-              <img :src="post.user.imageUrl" alt="用户头像" class="avatar">
-              <span class="username">{{ post.user.username }}</span>
+              <img @click.stop="goToUserProfile(post.user.id)" :src="post.user.imageUrl" alt="用户头像" class="avatar" style="cursor: pointer">
+              <span @click.stop="goToUserProfile(post.user.id)" class="username" style="cursor: pointer">{{ post.user.username }}</span>
             </div>
             <h2>{{ post.title }}</h2>
             <p>{{ post.content }}</p>
             <div v-if="post.imageUrl" class="post-image" :class="{ 'multiple-images': post.imageUrl.length > 1 }">
-  <template v-if="post.imageUrl.length === 1">
-    <img :src="post.imageUrl[0]" alt="帖子图片" class="single-image">
-  </template>
-  <template v-else>
-    <div v-for="(img, index) in post.imageUrl.slice(0, 3)" :key="index" style="position: relative;">
-      <img :src="img" alt="帖子图片">
-      <span v-if="index === 2 && post.imageUrl.length > 3" class="image-count">
-        {{ post.imageUrl.length }}张
-      </span>
-    </div>
-  </template>
-</div>
+              <template v-if="post.imageUrl.length === 1">
+                <img :src="post.imageUrl[0]" alt="帖子图片" class="single-image">
+              </template>
+              <template v-else>
+                <div v-for="(img, index) in post.imageUrl.slice(0, 3)" :key="index" style="position: relative;">
+                  <img :src="img" alt="帖子图片">
+                  <span v-if="index === 2 && post.imageUrl.length > 3" class="image-count">
+                    {{ post.imageUrl.length }}张
+                  </span>
+                </div>
+              </template>
+            </div>
             <div class="sectionname">{{ post.section.sectionName }}</div>
             <div class="post-meta">
-              
               <span class="post-time">{{ formatDate(post.postDate) }}</span>
               <div class="interaction">
                 <span class="likes">👍 {{ post.likesCount }}</span>
                 <span class="comments">💬 {{ post.commentsCount }}</span>
               </div>
             </div>
+          </div>
+          
+          <!-- 加载更多按钮，仅登录用户可见 -->
+          <div v-if="authStore.isLoggedIn && !isLastPage && !isLoading" class="load-more-container">
+            <button @click="loadMorePosts" class="load-more-button">加载更多</button>
+          </div>
+          
+          <!-- 加载中提示 -->
+          <div v-if="isLoading" class="loading-indicator">
+            加载中...
+          </div>
+          
+          <!-- 全部加载完毕提示 -->
+          <div v-if="isLastPage && posts.length > 0" class="all-loaded-message">
+            已加载全部内容
           </div>
          
         </div>
@@ -94,6 +108,10 @@ export default defineComponent({
     const authStore = useAuthStore();
     const posts = ref([]);
     const sections = ref([]);
+    const currentPage = ref(1);
+    const isLoading = ref(false);
+    const isLastPage = ref(false);
+    const totalPages = ref(1);
 
     const username = ref('');
     const password = ref('');
@@ -112,6 +130,10 @@ export default defineComponent({
       if (!sessionStorage.getItem('userInfo') && storedInLocal) {
         sessionStorage.setItem('userInfo', storedInLocal);
       }
+      
+      // 检查JWT令牌是否过期
+      checkJwtExpiration();
+      
       fetchPosts();
 
       // 添加全局滚轮事件监听
@@ -126,6 +148,35 @@ export default defineComponent({
         }
       }, 0);
     });
+
+    // 检查JWT令牌是否过期
+    const checkJwtExpiration = () => {
+      const jwtToken = sessionStorage.getItem('jwtToken');
+      if (jwtToken) {
+        try {
+          // 解析JWT获取过期时间（假设JWT格式为header.payload.signature）
+          const base64Url = jwtToken.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          }).join(''));
+          
+          const payload = JSON.parse(jsonPayload);
+          const expTime = payload.exp * 1000; // 转换为毫秒
+          
+          // 判断是否过期
+          if (Date.now() >= expTime) {
+            console.log('JWT令牌已过期');
+            authStore.logout(); // 执行登出操作
+          } else {
+            console.log('JWT令牌有效');
+            isLoggedIn.value = true;
+          }
+        } catch (error) {
+          console.error('解析JWT令牌出错:', error);
+        }
+      }
+    };
 
     // 卸载生命周期钩子
     onBeforeUnmount(() => {
@@ -142,8 +193,16 @@ export default defineComponent({
   
     // 根据登录状态决定展示的帖子数量
     const displayedPosts = computed(() => {
-      return authStore.isLoggedIn ? posts.value : posts.value.slice(0, 10);
+      return posts.value;
     });
+    
+    // 加载更多帖子
+    const loadMorePosts = async () => {
+      if (isLoading.value || isLastPage.value) return;
+      
+      currentPage.value++;
+      await fetchPosts(false);
+    };
 
 
     const handlePostClick = (postId)=>{
@@ -165,27 +224,58 @@ export default defineComponent({
       // 这里可以跳转到分区详情页
     };
 
-    // 获取帖子和游戏数据方法
-    const fetchPosts = async () => {
+    // 获取帖子数据方法
+    const fetchPosts = async (reset = true) => {
       try {
+        isLoading.value = true;
+        
+        if (reset) {
+          // 重置数据
+          posts.value = [];
+          currentPage.value = 1;
+          isLastPage.value = false;
+        }
+        
         const jwtToken = sessionStorage.getItem('jwtToken');
         const config = {
           headers: {
             'Authorization': `Bearer ${jwtToken}`
+          },
+          params: {
+            pageNum: currentPage.value,
+            pageSize: 10
           }
         };
-        const [postsRes, sectionsRes] = await Promise.all([
-          axios.get('http://localhost:7070/api/posts', config),
-          axios.get('http://localhost:7070/api/sections', config)
-        ]);
-
-        posts.value = postsRes.data;
-        sections.value = sectionsRes.data;
+        
+        // 获取帖子数据
+        const postsResponse = await axios.get('http://localhost:7070/api/posts/page', config);
+        const pageData = postsResponse.data;
+        const newPosts = pageData.records || [];
+        
+        // 获取分区数据（只在第一次加载时获取）
+        if (reset || sections.value.length === 0) {
+          const sectionsResponse = await axios.get('http://localhost:7070/api/sections', config);
+          sections.value = sectionsResponse.data;
+        }
+        
+        // 更新总页数
+        totalPages.value = pageData.pages || 1;
+        
+        // 判断是否是最后一页
+        if (currentPage.value >= totalPages.value || newPosts.length === 0 || !authStore.isLoggedIn) {
+          isLastPage.value = true;
+        }
+        
+        // 添加新帖子到列表
+        if (reset) {
+          posts.value = newPosts;
+        } else {
+          posts.value = [...posts.value, ...newPosts];
+        }
 
         // 确保DOM更新后执行
         setTimeout(() => {
           const container = document.querySelector('.section-list-scroll');
-          // 强制重置滚动位置
           if (container) {
             container.scrollLeft = 0;
             // 立即更新按钮状态
@@ -216,8 +306,11 @@ export default defineComponent({
         }, 0);
       } catch (error) {
         console.error('数据获取失败:', error);
+      } finally {
+        isLoading.value = false;
       }
     };
+    
     const router = useRouter(); // 引入路由
     const goToPage = (path) => {
             // 假设你还想管理当前激活的项，可保留这行代码来更新状态
@@ -322,8 +415,12 @@ export default defineComponent({
     // 发布新内容方法
     
     const currentSection = ref('community_center');
+    const goToUserProfile = (userId) => {
+      router.push(`/user/${userId}`);
+    };
     return {
       isLoggedIn,
+      authStore,
       posts,
       displayedPosts,
       sections,
@@ -334,9 +431,13 @@ export default defineComponent({
       userInfo,
       currentSection,
       captchaImage,
-  userCaptcha,
-  isCaptchaLoading,
+      userCaptcha,
+      isCaptchaLoading,
+      isLoading,
+      isLastPage,
+      loadMorePosts,
       goToUserCenter,
+      goToUserProfile,
       handlePostClick,
       handlesectionClick,
       fetchPosts,
@@ -346,7 +447,6 @@ export default defineComponent({
       scrollLeft,
       updateScrollButtonsVisibility,
       goToPage 
-      
     };
   }
 });
@@ -821,5 +921,44 @@ main {
   gap: 10px;
   font-size: 12px;
   color: #666;
+}
+
+/* 加载更多按钮样式 */
+.load-more-container {
+  padding: 10px 0 20px 0;
+  width: 650px;
+  display: flex;
+  justify-content: center;
+}
+
+.load-more-button {
+  width: 100%;
+  background-color: #409EFF;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 12px 0;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.load-more-button:hover {
+  background-color: #66b1ff;
+}
+
+.loading-indicator {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+  font-size: 14px;
+}
+
+.all-loaded-message {
+  text-align: center;
+  padding: 20px;
+  color: #999;
+  font-size: 14px;
+  font-style: italic;
 }
 </style>    

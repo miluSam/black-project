@@ -24,7 +24,7 @@
             <img :src="userInfo.avatar" alt="用户头像" class="avatar" />
             <span class="username">{{ userInfo.username }}</span>
             <div v-if="isDropdownVisible" class="dropdown">
-              <div class="dropdown-item" @click="goToPage(('UserCenter'))">用户中心</div>
+              <div class="dropdown-item" @click="goToUserProfile">用户中心</div>
               <div class="dropdown-item" @click="handleLogout">退出登录</div>
             </div>
           </div>
@@ -190,10 +190,17 @@ const handleLogin = async () => {
 }
 
 const isLoggedIn = computed(() => authStore.isLoggedIn);
-const userInfo = computed(() => authStore.userInfo);const goToPage = (path) => {
-  router.push({ name: path })
-}
+const userInfo = computed(() => authStore.userInfo);
 
+const goToPage = (path) => {
+  router.push({ path: `/${path}` });
+};
+
+const goToUserProfile = () => {
+  if (isLoggedIn.value && userInfo.value.id) {
+    router.push(`/user/${userInfo.value.id}`);
+  }
+};
 
 </script>
 

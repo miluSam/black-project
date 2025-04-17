@@ -13,7 +13,7 @@
           <img :src="authStore.userInfo.avatar" alt="用户头像" class="avatar" />
           <span class="username">{{ authStore.userInfo.username }}</span>
           <div v-if="isDropdownVisible" class="dropdown">
-            <div class="dropdown-item" @click="goToPage('UserCenter')">用户中心</div>
+            <div class="dropdown-item" @click="goToUserProfile">用户中心</div>
             <div class="dropdown-item" @click="handleLogout">退出登录</div>
           </div>
         </div>
@@ -314,10 +314,14 @@ export default {
       isDropdownVisible.value = !isDropdownVisible.value;
     };
 
-    const goToPage = (pageName) => {
-       // 假设路由名称与 pageName 一致
-      router.push({ name: pageName });
-      isDropdownVisible.value = false; // 关闭下拉菜单
+    const goToPage = (path) => {
+      router.push({ path: `/${path}` });
+    };
+
+    const goToUserProfile = () => {
+      if (authStore.isLoggedIn && authStore.userInfo.id) {
+        router.push(`/user/${authStore.userInfo.id}`);
+      }
     };
 
     const handleLogout = () => {
@@ -352,6 +356,7 @@ export default {
       submitPost,
       toggleDropdown,
       goToPage,
+      goToUserProfile,
       handleLogout,
       fetchSections,
       fetchHotPosts, // 如果 RightBlock 需要，也暴露

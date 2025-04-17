@@ -36,7 +36,7 @@
               <div class="profile-actions">
                 <!-- 如果是当前登录用户，显示编辑按钮；否则显示关注和私信按钮 -->
                 <template v-if="isCurrentUser">
-                  <button class="edit-profile-btn">编辑个人资料</button>
+                  <button class="edit-profile-btn" @click="showEditProfileDialog = true">编辑个人资料</button>
                 </template>
                 <template v-else>
                   <button :class="['follow-btn', {'following': isFollowing}]" @click="toggleFollow">
@@ -146,6 +146,69 @@
         </div>
       </div>
     </div>
+
+    <!-- 添加编辑个人资料弹窗 -->
+    <div v-if="showEditProfileDialog" class="message-dialog-overlay">
+      <div class="profile-edit-dialog">
+        <div class="message-dialog-header">
+          <h3>编辑个人资料</h3>
+          <button class="close-btn" @click="showEditProfileDialog = false">×</button>
+        </div>
+        <div class="profile-edit-body">
+          <!-- 头像上传区域 -->
+          <div class="avatar-upload">
+            <div class="avatar-preview">
+              <img :src="editProfileForm.imagePreview || userProfile.imageUrl" alt="用户头像" class="edit-avatar">
+            </div>
+            <div class="avatar-actions">
+              <label for="avatar-upload" class="upload-btn">上传头像</label>
+              <input 
+                type="file" 
+                id="avatar-upload" 
+                accept="image/*" 
+                style="display: none;"
+                @change="handleAvatarUpload"
+              >
+            </div>
+          </div>
+          
+          <!-- 性别选择 -->
+          <div class="form-group">
+            <label>性别</label>
+            <div class="gender-options">
+              <label class="gender-option">
+                <input type="radio" v-model="editProfileForm.gender" value="male">
+                <span>男</span>
+              </label>
+              <label class="gender-option">
+                <input type="radio" v-model="editProfileForm.gender" value="female">
+                <span>女</span>
+              </label>
+              <label class="gender-option">
+                <input type="radio" v-model="editProfileForm.gender" value="other">
+                <span>其他</span>
+              </label>
+            </div>
+          </div>
+          
+          <!-- 个人简介 -->
+          <div class="form-group">
+            <label>个人简介</label>
+            <textarea 
+              v-model="editProfileForm.bio" 
+              placeholder="介绍一下自己吧..." 
+              class="bio-input"
+            ></textarea>
+          </div>
+        </div>
+        <div class="message-dialog-footer">
+          <button class="cancel-btn" @click="showEditProfileDialog = false">取消</button>
+          <button class="save-btn" @click="saveProfileChanges" :disabled="isSaving">
+            {{ isSaving ? '保存中...' : '保存修改' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -192,6 +255,16 @@ export default defineComponent({
     // 判断是否是当前登录用户的个人资料
     const isCurrentUser = computed(() => {
       return authStore.isLoggedIn && authStore.userInfo.id === parseInt(userId.value);
+    });
+
+    // 添加编辑个人资料相关变量
+    const showEditProfileDialog = ref(false);
+    const isSaving = ref(false);
+    const editProfileForm = ref({
+      imagePreview: '',
+      imageFile: null,
+      bio: '',
+      gender: 'other'
     });
 
     // 检查JWT令牌是否过期
@@ -426,6 +499,133 @@ export default defineComponent({
       });
     };
 
+    // 初始化编辑表单
+    const initEditForm = () => {
+      editProfileForm.value = {
+        imagePreview: userProfile.value.imageUrl || '',
+        imageFile: null,
+        bio: userProfile.value.bio || '',
+        gender: userProfile.value.gender || 'other'
+      };
+    };
+
+    // 处理头像上传 - 修改为仅预览不上传
+    const handleAvatarUpload = (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      // 检查文件类型
+      if (!file.type.includes('image/')) {
+        alert('请上传图片文件');
+        return;
+      }
+      
+      // 创建预览
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        // 只保存预览和文件对象，不立即上传
+        editProfileForm.value.imagePreview = e.target.result;
+        editProfileForm.value.imageFile = file;
+      };
+      reader.readAsDataURL(file);
+    };
+
+    // 保存个人资料修改 - 修改为先上传图片再保存资料
+    const saveProfileChanges = async () => {
+      if (isSaving.value) return;
+      
+      try {
+        isSaving.value = true;
+        
+        const jwtToken = sessionStorage.getItem('jwtToken');
+        if (!jwtToken) {
+          alert('请先登录');
+          return;
+        }
+        
+        let imageUrl = userProfile.value.imageUrl;
+        
+        // 如果有新上传的图片，先上传图片
+        if (editProfileForm.value.imageFile) {
+          const formData = new FormData();
+          formData.append('image', editProfileForm.value.imageFile);
+          
+          // 修改为POST multipart/form-data请求
+          const imageUploadConfig = {
+            headers: {
+              'Authorization': `Bearer ${jwtToken}`,
+              'Content-Type': 'multipart/form-data'
+            }
+          };
+          
+          // 上传图片并获取URL
+          const uploadResponse = await axios.post(
+            `http://localhost:7070/api/users/upload-avatar`,
+            formData,
+            imageUploadConfig
+          );
+          
+          // 获取上传后的图片URL
+          imageUrl = uploadResponse.data.imageUrl;
+        }
+        
+        // 构建要更新的用户数据
+        const updateData = {
+          bio: editProfileForm.value.bio,
+          gender: editProfileForm.value.gender,
+          imageUrl: imageUrl // 使用上传后的图片URL或原来的URL
+        };
+        
+        // 调用更新接口
+        await axios.put(
+          `http://localhost:7070/api/users/${userId.value}/profile`, 
+          updateData,
+          {
+            headers: {
+              'Authorization': `Bearer ${jwtToken}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        // 更新成功后更新本地用户数据和全局authStore
+        userProfile.value = {
+          ...userProfile.value,
+          ...updateData
+        };
+        
+        // 同时更新全局authStore中的用户信息 - 确保头像URL在页眉更新
+        if (isCurrentUser.value && authStore.isLoggedIn) {
+          // 更新authStore中的用户头像
+          authStore.updateUserAvatar(imageUrl);
+        }
+        
+        showEditProfileDialog.value = false;
+        alert('个人资料更新成功');
+      } catch (error) {
+        console.error('更新个人资料失败:', error);
+        alert('更新个人资料失败，请稍后再试');
+      } finally {
+        isSaving.value = false;
+      }
+    };
+
+    // 更新用户头像
+    const updateAvatar = async (imageUrl) => {
+      try {
+        userProfile.value.imageUrl = imageUrl;
+        
+        // 如果是当前登录用户，同时更新authStore中的头像
+        if (authStore.isLoggedIn && authStore.userInfo && authStore.userInfo.id === userProfile.value.id) {
+          authStore.updateUserAvatar(imageUrl);
+        }
+        
+        // 其他处理代码...
+      } catch (error) {
+        console.error('更新头像失败:', error);
+      }
+    };
+
     // 组件挂载时获取数据
     onMounted(() => {
       // 检查用户是否已登录
@@ -438,7 +638,10 @@ export default defineComponent({
       
       // 获取用户资料和帖子
       if (userId.value) {
-        fetchUserProfile();
+        fetchUserProfile().then(() => {
+          // 获取到用户资料后初始化编辑表单
+          initEditForm();
+        });
         fetchUserPosts();
       }
       
@@ -476,7 +679,14 @@ export default defineComponent({
       sendMessage,
       submitMessage,
       formatDate,
-      handleGlobalScroll
+      handleGlobalScroll,
+      showEditProfileDialog,
+      isSaving,
+      editProfileForm,
+      initEditForm,
+      handleAvatarUpload,
+      saveProfileChanges,
+      updateAvatar
     };
   }
 });
@@ -705,7 +915,7 @@ main {
   position: relative;
   cursor: pointer;
   transition: transform 0.2s;
-  height: 300px;
+  height: 380px;
   padding-top: 50px; /* 为顶部用户信息留出空间 */
   box-sizing: border-box; /* 确保padding计入宽度 */
 }
@@ -1001,6 +1211,113 @@ main {
 }
 
 .send-btn:disabled {
+  background-color: #a0cfff;
+  cursor: not-allowed;
+}
+
+/* 编辑个人资料弹窗样式 */
+.profile-edit-dialog {
+  width: 500px;
+  background-color: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.profile-edit-body {
+  padding: 25px;
+}
+
+.avatar-upload {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 25px;
+}
+
+.avatar-preview {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid #f0f2f5;
+}
+
+.edit-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upload-btn {
+  display: inline-block;
+  padding: 8px 15px;
+  background-color: #409EFF;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  text-align: center;
+  transition: background-color 0.3s;
+}
+
+.upload-btn:hover {
+  background-color: #66b1ff;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+}
+
+.gender-options {
+  display: flex;
+  gap: 20px;
+}
+
+.gender-option {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.gender-option input {
+  margin-right: 8px;
+}
+
+.bio-input {
+  width: 100%;
+  height: 100px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  resize: vertical;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.save-btn {
+  background-color: #409EFF;
+  color: white;
+}
+
+.save-btn:hover:not(:disabled) {
+  background-color: #66b1ff;
+}
+
+.save-btn:disabled {
   background-color: #a0cfff;
   cursor: not-allowed;
 }
