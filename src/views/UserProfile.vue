@@ -935,7 +935,7 @@ main {
 }
 
 .post-item h2 {
-  margin: 10px 0 0 0;
+  margin: 10px 0 10px 0;
   font-size: 16px;
   color: #333;
 }

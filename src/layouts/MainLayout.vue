@@ -36,7 +36,7 @@
         <span class="close" @click="showLoginPopup = false">&times;</span>
         <h2>密码登录</h2>
         <input type="text" v-model="username" placeholder="账号" />
-        <input type="password" v-model="password" placeholder="密码" />
+        <input type="password" v-model="password" placeholder="密码" @keyup.enter="handleLogin" />
         <div class="captcha-section">
       <div class="captcha-image-wrapper">
         <img 
@@ -55,6 +55,7 @@
         v-model="userCaptcha"
         placeholder="输入验证码"
         class="captcha-input"
+        @keyup.enter="handleLogin"
       >
       <button 
         @click="getCaptcha"
