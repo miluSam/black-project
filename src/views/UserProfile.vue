@@ -209,11 +209,53 @@
         </div>
       </div>
     </div>
+    
+    <!-- 使用teleport将弹窗移到body元素底部，避免被其他元素遮挡 -->
+    <teleport to="body">
+      <!-- 头像裁剪弹窗 - 简单可靠的实现 -->
+      <div v-if="showCropDialog" class="crop-overlay">
+        <div class="crop-dialog">
+          <div class="crop-header">
+            <h3>裁剪头像</h3>
+            <button @click="cancelCrop" class="close-btn">×</button>
+          </div>
+          
+          <div class="crop-body">
+            <!-- 裁剪容器 -->
+            <div class="crop-container" 
+                 @wheel="handleWheel" 
+                 @mousedown="startDrag" 
+                 @touchstart="startDrag">
+              <!-- 可拖动的图片 -->
+              <div class="crop-image-wrapper"
+                  :style="{transform: `translate(${imgPosition.x}px, ${imgPosition.y}px) scale(${zoomValue})`}">
+                <img :src="cropImageSrc" ref="cropImage" @load="onImageLoaded">
+              </div>
+              
+              <!-- 固定位置的裁剪圆圈 -->
+              <div class="crop-circle-mask">
+                <div class="crop-circle"></div>
+              </div>
+            </div>
+            
+            <!-- 操作提示 -->
+            <div class="crop-hint">
+              拖动图片调整位置，使用鼠标滚轮放大缩小
+            </div>
+          </div>
+          
+          <div class="crop-footer">
+            <button @click="cancelCrop" class="cancel-btn">取消</button>
+            <button @click="confirmCrop" class="confirm-btn">确认</button>
+          </div>
+        </div>
+      </div>
+    </teleport>
   </div>
 </template>
 
 <script>
-import { defineComponent, ref, onMounted, onBeforeUnmount, computed, watch} from 'vue';
+import { defineComponent, ref, onMounted, onBeforeUnmount, computed, watch } from 'vue';
 import axios from 'axios';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
@@ -266,6 +308,16 @@ export default defineComponent({
       bio: '',
       gender: 'other'
     });
+
+    // 裁剪相关变量
+    const showCropDialog = ref(false);
+    const cropImageSrc = ref('');
+    const cropImage = ref(null);
+    const zoomValue = ref(1);
+    const imgPosition = ref({ x: 0, y: 0 });
+    const originalFile = ref(null);
+    const isDragging = ref(false);
+    const startPosition = ref({ x: 0, y: 0 });
 
     // 检查JWT令牌是否过期
     const checkJwtExpiration = () => {
@@ -509,7 +561,41 @@ export default defineComponent({
       };
     };
 
-    // 处理头像上传 - 修改为仅预览不上传
+    // 图片加载完成后自动适应容器大小
+    const onImageLoaded = () => {
+      if (!cropImage.value) return;
+      
+      const img = cropImage.value;
+      const cropContainer = document.querySelector('.crop-container');
+      
+      if (!cropContainer) return;
+      
+      // 计算容器和图片尺寸
+      const containerWidth = cropContainer.offsetWidth;
+      const containerHeight = cropContainer.offsetHeight;
+      
+      // 减去一些边距，确保图片不会紧贴容器边缘
+      const maxWidth = containerWidth - 40; 
+      const maxHeight = containerHeight - 40;
+      
+      // 计算适合容器的缩放比例
+      const widthRatio = maxWidth / img.naturalWidth;
+      const heightRatio = maxHeight / img.naturalHeight;
+      
+      // 选择较小的比例，确保图片完全在容器内
+      const fitScale = Math.min(widthRatio, heightRatio);
+      
+      // 设置初始缩放比例和位置
+      zoomValue.value = fitScale;
+      
+      // 居中图片
+      imgPosition.value = {
+        x: (containerWidth - img.naturalWidth * fitScale) / 2,
+        y: (containerHeight - img.naturalHeight * fitScale) / 2
+      };
+    };
+    
+    // 处理头像上传
     const handleAvatarUpload = (event) => {
       const file = event.target.files[0];
       if (!file) return;
@@ -520,14 +606,150 @@ export default defineComponent({
         return;
       }
       
-      // 创建预览
+      // 储存原始文件
+      originalFile.value = file;
+      
+      // 创建图片预览
       const reader = new FileReader();
       reader.onload = (e) => {
-        // 只保存预览和文件对象，不立即上传
-        editProfileForm.value.imagePreview = e.target.result;
-        editProfileForm.value.imageFile = file;
+        cropImageSrc.value = e.target.result;
+        showCropDialog.value = true;
+        
+        // 初始缩放比例会在onImageLoaded中设置
       };
       reader.readAsDataURL(file);
+    };
+    
+    // 开始拖动图片
+    const startDrag = (event) => {
+      event.preventDefault();
+      isDragging.value = true;
+      
+      const pageX = event.pageX || event.touches[0].pageX;
+      const pageY = event.pageY || event.touches[0].pageY;
+      
+      startPosition.value = {
+        x: pageX - imgPosition.value.x,
+        y: pageY - imgPosition.value.y
+      };
+      
+      document.addEventListener('mousemove', dragMove);
+      document.addEventListener('touchmove', dragMove, { passive: false });
+      document.addEventListener('mouseup', dragEnd);
+      document.addEventListener('touchend', dragEnd);
+    };
+    
+    // 拖动移动
+    const dragMove = (event) => {
+      if (!isDragging.value) return;
+      event.preventDefault();
+      
+      const pageX = event.pageX || event.touches[0].pageX;
+      const pageY = event.pageY || event.touches[0].pageY;
+      
+      imgPosition.value = {
+        x: pageX - startPosition.value.x,
+        y: pageY - startPosition.value.y
+      };
+    };
+    
+    // 结束拖动
+    const dragEnd = () => {
+      isDragging.value = false;
+      document.removeEventListener('mousemove', dragMove);
+      document.removeEventListener('touchmove', dragMove);
+      document.removeEventListener('mouseup', dragEnd);
+      document.removeEventListener('touchend', dragEnd);
+    };
+    
+    // 取消裁剪
+    const cancelCrop = () => {
+      showCropDialog.value = false;
+      cropImageSrc.value = '';
+      originalFile.value = null;
+      
+      // 移除事件监听器
+      document.removeEventListener('mousemove', dragMove);
+      document.removeEventListener('touchmove', dragMove);
+      document.removeEventListener('mouseup', dragEnd);
+      document.removeEventListener('touchend', dragEnd);
+    };
+    
+    // 确认裁剪
+    const confirmCrop = () => {
+      if (!cropImage.value || !originalFile.value) {
+        cancelCrop();
+        return;
+      }
+      
+      try {
+        // 创建canvas来执行裁剪
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 裁剪圆的大小和位置
+        const circleSize = 150; // 裁剪圆的直径
+        canvas.width = circleSize;
+        canvas.height = circleSize;
+        
+        // 创建圆形裁剪区域
+        ctx.beginPath();
+        ctx.arc(circleSize/2, circleSize/2, circleSize/2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        
+        // 获取图片和容器
+        const img = cropImage.value;
+        const container = document.querySelector('.crop-container');
+        if (!container) throw new Error('裁剪容器未找到');
+        
+        // 计算中心点位置（裁剪圆位于容器中心）
+        const centerX = container.offsetWidth / 2;
+        const centerY = container.offsetHeight / 2;
+        
+        // 计算从图片上哪个位置裁剪
+        // 需要考虑图片的位置和缩放
+        const sourceX = (centerX - imgPosition.value.x) / zoomValue.value;
+        const sourceY = (centerY - imgPosition.value.y) / zoomValue.value;
+        const sourceSize = circleSize / zoomValue.value;
+        
+        // 执行裁剪绘制
+        ctx.drawImage(
+          img,
+          sourceX - sourceSize/2, // 中心点向左偏移半个裁剪尺寸
+          sourceY - sourceSize/2, // 中心点向上偏移半个裁剪尺寸
+          sourceSize,
+          sourceSize,
+          0, 0, circleSize, circleSize
+        );
+        
+        // 转换为blob
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            alert('裁剪失败，请重试');
+            return;
+          }
+          
+          // 创建File对象
+          const croppedFile = new File([blob], originalFile.value.name, {
+            type: 'image/jpeg',
+            lastModified: Date.now()
+          });
+          
+          // 设置预览和文件对象
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            editProfileForm.value.imagePreview = e.target.result;
+            editProfileForm.value.imageFile = croppedFile;
+            showCropDialog.value = false;
+          };
+          reader.readAsDataURL(blob);
+        }, 'image/jpeg', 0.9);
+      } catch (error) {
+        console.error('裁剪失败:', error);
+        alert('裁剪失败: ' + error.message);
+        cancelCrop();
+      }
     };
 
     // 保存个人资料修改 - 修改为先上传图片再保存资料
@@ -604,7 +826,31 @@ export default defineComponent({
         alert('个人资料更新成功');
       } catch (error) {
         console.error('更新个人资料失败:', error);
-        alert('更新个人资料失败，请稍后再试');
+        
+        // 根据错误类型提供详细的错误信息
+        if (error.response) {
+          // 服务器返回了错误状态码
+          const status = error.response.status;
+          if (status === 413) {
+            alert('头像文件过大！即使压缩后仍超过服务器允许的最大上传限制(2MB)，请选择更小的图片或进一步压缩后再试。');
+          } else if (status === 401) {
+            alert('登录已过期，请重新登录后再试。');
+          } else if (status === 403) {
+            alert('您没有权限执行此操作。');
+          } else if (status === 404) {
+            alert('用户资料不存在或已被删除。');
+          } else {
+            // 其他错误状态码
+            const message = error.response.data?.message || '服务器返回错误';
+            alert(`更新个人资料失败: ${message} (错误码: ${status})`);
+          }
+        } else if (error.request) {
+          // 请求发出但没有收到响应
+          alert('无法连接到服务器，请检查您的网络连接后再试。');
+        } else {
+          // 请求设置时出错
+          alert(`更新个人资料失败: ${error.message}`);
+        }
       } finally {
         isSaving.value = false;
       }
@@ -624,6 +870,40 @@ export default defineComponent({
       } catch (error) {
         console.error('更新头像失败:', error);
       }
+    };
+
+    // 使用鼠标滚轮控制缩放
+    const handleWheel = (event) => {
+      event.preventDefault();
+      
+      if (!cropImage.value) return;
+      
+      // 获取鼠标相对于容器的位置
+      const container = document.querySelector('.crop-container');
+      if (!container) return;
+      
+      const rect = container.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+      
+      // 计算鼠标在图片坐标系中的位置
+      const imgX = (mouseX - imgPosition.value.x) / zoomValue.value;
+      const imgY = (mouseY - imgPosition.value.y) / zoomValue.value;
+      
+      // 定义缩放因子(10%的增减)
+      const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
+      
+      // 限制缩放范围在0.01到30之间
+      const newZoom = Math.max(0.05, Math.min(30, zoomValue.value * zoomFactor));
+      
+      // 更新位置，保持鼠标指向的点不变
+      imgPosition.value = {
+        x: mouseX - imgX * newZoom,
+        y: mouseY - imgY * newZoom
+      };
+      
+      // 更新缩放值
+      zoomValue.value = newZoom;
     };
 
     // 监听路由参数变化
@@ -663,6 +943,12 @@ export default defineComponent({
     onBeforeUnmount(() => {
       // 移除全局滚轮事件监听
       window.removeEventListener('wheel', handleGlobalScroll);
+      
+      // 清理裁剪相关事件
+      document.removeEventListener('mousemove', dragMove);
+      document.removeEventListener('touchmove', dragMove);
+      document.removeEventListener('mouseup', dragEnd);
+      document.removeEventListener('touchend', dragEnd);
     });
     
     return {
@@ -696,7 +982,20 @@ export default defineComponent({
       initEditForm,
       handleAvatarUpload,
       saveProfileChanges,
-      updateAvatar
+      updateAvatar,
+      showCropDialog,
+      cropImageSrc,
+      cropImage,
+      zoomValue,
+      imgPosition,
+      originalFile,
+      isDragging,
+      startPosition,
+      onImageLoaded,
+      startDrag,
+      cancelCrop,
+      confirmCrop,
+      handleWheel
     };
   }
 });
@@ -1330,5 +1629,132 @@ main {
 .save-btn:disabled {
   background-color: #a0cfff;
   cursor: not-allowed;
+}
+
+/* 简单直接的裁剪样式 */
+.crop-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999; /* 增大z-index确保在最上层 */
+}
+
+.crop-dialog {
+  width: 500px;
+  background-color: white;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.crop-header {
+  padding: 15px 20px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.crop-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #999;
+  cursor: pointer;
+}
+
+.crop-body {
+  padding: 20px;
+}
+
+.crop-container {
+  position: relative;
+  width: 100%;
+  height: 350px;
+  background-color: #f0f0f0;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.crop-image-wrapper {
+  position: absolute;
+  cursor: grab;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.crop-image-wrapper:active {
+  cursor: grabbing;
+}
+
+.crop-image-wrapper img {
+  display: block;
+  max-width: none;
+  max-height: none;
+}
+
+.crop-circle-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.crop-circle {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  border: 2px dashed white;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+}
+
+.crop-hint {
+  text-align: center;
+  font-size: 13px;
+  color: #666;
+  margin-top: 15px;
+}
+
+.crop-footer {
+  padding: 15px 20px;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.crop-footer button {
+  padding: 8px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+}
+
+.cancel-btn {
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+.confirm-btn {
+  background-color: #409EFF;
+  color: white;
 }
 </style>    

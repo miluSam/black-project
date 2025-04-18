@@ -505,17 +505,17 @@ const sendComment = async () => {
     // 执行删除评论的操作
     const deleteComment = async (commentId) => {
       try {
-        const response = await axios.delete(`${import.meta.env.VITE_API_URL}/comments/${commentId}`, {
+        const response = await axios.delete(`/api/comments/delete/${commentId}`, {
           headers: {
             Authorization: `Bearer ${authStore.userInfo?.token || localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken')}`
           }
         });
         
         if (response.status === 200) {
-          // 更新评论列表
-          post.value.comments = post.value.comments.filter(comment => comment.id !== commentId);
           // 显示成功消息
           ElMessage.success('评论已成功删除');
+          // 刷新帖子详情以更新评论列表
+          await fetchPostDetail();
           // 关闭上下文菜单
           closeContextMenu();
         }
