@@ -29,13 +29,13 @@
         </div>
         
         <!-- 帖子列表 -->
-        <div class="posts-list">
+        <div class="posts-list" v-if="!showAnalytics">
           <div v-if="isLoading && userPosts.length === 0" class="loading">加载中...</div>
           <div v-else-if="userPosts.length === 0" class="no-posts">
             暂无帖子，开始创作吧！
           </div>
           <div v-else class="post-items">
-            <div v-for="post in userPosts" :key="post.id" class="post-item">
+            <div v-for="post in userPosts" :key="post.id" class="post-item" @click="viewPostAnalytics(post.id)">
               <div class="post-image-container">
                 <div class="post-image" v-if="post.imageUrl && post.imageUrl.length">
                   <img :src="post.imageUrl[0]" alt="帖子图片">
@@ -66,12 +66,12 @@
               </div>
               <div class="post-content-container">
                 <div class="post-content">
-                  <h3 class="post-title" @click="viewPostDetail(post.id)">{{ post.title }}</h3>
+                  <h3 class="post-title">{{ post.title }}</h3>
                   <p class="post-summary">{{ post.content }}</p>
                 </div>
                 <div class="post-actions">
-                  <button class="action-btn edit" @click="editPost(post.id)">编辑</button>
-                  <button class="action-btn delete" @click="confirmDelete(post.id)">删除</button>
+                  <button class="action-btn edit" @click.stop="editPost(post.id)">编辑</button>
+                  <button class="action-btn delete" @click.stop="confirmDelete(post.id)">删除</button>
                 </div>
               </div>
             </div>
@@ -90,7 +90,204 @@
             <div v-if="!hasMorePosts && userPosts.length > 0" class="all-loaded-message">
               已加载全部内容
             </div>
+          </div>
+        </div>
+        
+        <!-- 数据分析面板 -->
+        <div v-if="showAnalytics" class="analytics-panel">
+          <div class="analytics-header">
+            <div class="analytics-title">
+              <button class="back-button" @click="closeAnalytics">返回</button>
+              <h2>内容详情分析</h2>
+            </div>
+            <div class="post-basic-info">
+              <h3>{{ currentPostAnalytics?.title }}</h3>
+              <div class="post-meta-info">
+                <span class="section-label">{{ currentPostAnalytics?.section }}</span>
+                <span class="post-date">{{ formatDate(currentPostAnalytics?.postDate) }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div v-if="analyticsLoading" class="analytics-loading">
+            加载分析数据中...
+          </div>
+          
+          <div v-else class="analytics-content">
+            <!-- 内容数据 -->
+            <div class="analytics-section">
+              <h4>内容</h4>
+              <div class="analytics-stats-row">
+                <div class="analytics-stat-item">
+                  <span class="analytics-label">内容得分</span>
+                  <span class="analytics-value">-</span>
+                </div>
+                <div class="analytics-stat-item">
+                  <span class="analytics-label">浏览量</span>
+                  <span class="analytics-value">{{ currentPostAnalytics?.viewsCount }}</span>
+                </div>
+                <div class="analytics-stat-item">
+                  <span class="analytics-label">平均浏览时长</span>
+                  <span class="analytics-value">{{ currentPostAnalytics?.avgViewTime }}秒</span>
+                </div>
+              </div>
+            </div>
             
+            <!-- 浏览量趋势图 -->
+            <div class="analytics-section">
+              <h4>浏览量趋势</h4>
+              <div class="chart-container">
+                <div class="chart-y-axis">
+                  <div v-for="(value, index) in 5" :key="index" class="y-axis-label">
+                    {{ 200 - index * 50 }}
+                  </div>
+                </div>
+                <div class="chart-area">
+                  <div class="chart-line" :style="{ height: '200px' }">
+                    <div 
+                      v-for="(value, index) in viewsChartData.data" 
+                      :key="index" 
+                      class="chart-bar"
+                      :style="{ 
+                        height: `${Math.min(value * 4, 200)}px`,
+                        left: `${index * (100 / viewsChartData.data.length)}%`
+                      }"
+                    ></div>
+                  </div>
+                  <div class="chart-x-axis">
+                    <div 
+                      v-for="(label, index) in viewsChartData.labels"
+                      :key="index"
+                      class="x-axis-label"
+                      :style="{ left: `${index * (100 / viewsChartData.labels.length)}%` }"
+                      v-show="index % 5 === 0"
+                    >
+                      {{ label }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 互动数据 -->
+            <div class="analytics-section">
+              <h4>互动</h4>
+              
+              <!-- 互动数量 -->
+              <div class="analytics-stats-row interaction-stats">
+                <div class="analytics-stat-box">
+                  <div class="stat-label">点赞量</div>
+                  <div class="stat-value">{{ currentPostAnalytics?.likesCount || 0 }}</div>
+                </div>
+                <div class="analytics-stat-box">
+                  <div class="stat-label">评论量</div>
+                  <div class="stat-value">{{ currentPostAnalytics?.commentsCount || 0 }}</div>
+                </div>
+                <div class="analytics-stat-box">
+                  <div class="stat-label">分享量</div>
+                  <div class="stat-value">{{ currentPostAnalytics?.shareCount || 0 }}</div>
+                </div>
+                <div class="analytics-stat-box">
+                  <div class="stat-label">收藏量</div>
+                  <div class="stat-value">{{ currentPostAnalytics?.favoriteCount || 0 }}</div>
+                </div>
+              </div>
+              
+              <!-- 互动率 -->
+              <div class="analytics-stats-row interaction-stats">
+                <div class="analytics-stat-box">
+                  <div class="stat-label">点赞率</div>
+                  <div class="stat-value">{{ currentPostAnalytics?.likeRate || '0.0' }}%</div>
+                </div>
+                <div class="analytics-stat-box">
+                  <div class="stat-label">评论率</div>
+                  <div class="stat-value">{{ currentPostAnalytics?.commentRate || '0.0' }}%</div>
+                </div>
+                <div class="analytics-stat-box">
+                  <div class="stat-label">分享率</div>
+                  <div class="stat-value">{{ currentPostAnalytics?.shareRate || '0.0' }}%</div>
+                </div>
+                <div class="analytics-stat-box">
+                  <div class="stat-label">收藏率</div>
+                  <div class="stat-value">{{ currentPostAnalytics?.favoriteRate || '0.0' }}%</div>
+                </div>
+              </div>
+              
+              <!-- 互动趋势图 -->
+              <div class="interaction-chart-container">
+                <div class="chart-y-axis">
+                  <div v-for="i in 5" :key="i" class="y-axis-label">
+                    {{ (i - 1) * 0.3 }}
+                  </div>
+                </div>
+                <div class="chart-area">
+                  <div class="trend-line-chart">
+                    <svg width="100%" height="200" viewBox="0 0 1000 200" preserveAspectRatio="none">
+                      <!-- 示例折线，真实数据应从API获取 -->
+                      <polyline 
+                        points="0,200 100,180 200,190 300,100 400,180 500,200 600,190 700,195 800,190 900,180 1000,190" 
+                        fill="none" 
+                        stroke="#409EFF" 
+                        stroke-width="2"
+                      />
+                    </svg>
+                    <!-- 网格线 -->
+                    <div class="grid-lines">
+                      <div v-for="i in 4" :key="i" class="grid-line" :style="{bottom: `${i * 25}%`}"></div>
+                    </div>
+                  </div>
+                  <div class="chart-x-axis">
+                    <div v-for="(date, index) in ['02.09', '02.17', '02.25', '03.05', '03.13', '03.21', '03.29', '04.06', '04.14']" :key="index" class="date-label" :style="{left: `${index * 12.5}%`}">
+                      {{ date }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 粉丝板块 -->
+            <div class="analytics-section fans-section">
+              <h4>粉丝</h4>
+              
+              <!-- 粉丝数据 -->
+              <div class="analytics-stats-row">
+                <div class="analytics-stat-box">
+                  <div class="stat-label">新增粉丝</div>
+                  <div class="stat-value">{{ currentPostAnalytics?.newFans || 0 }}</div>
+                </div>
+              </div>
+              
+              <!-- 粉丝趋势图 -->
+              <div class="interaction-chart-container">
+                <div class="chart-y-axis">
+                  <div v-for="i in 5" :key="i" class="y-axis-label">
+                    {{ (i - 1) * 0.3 }}
+                  </div>
+                </div>
+                <div class="chart-area">
+                  <div class="trend-line-chart">
+                    <svg width="100%" height="200" viewBox="0 0 1000 200" preserveAspectRatio="none">
+                      <!-- 示例折线，真实数据应从API获取 -->
+                      <polyline 
+                        points="0,200 100,200 200,200 300,200 400,200 500,200 600,200 700,200 800,200 900,200 1000,200" 
+                        fill="none" 
+                        stroke="#409EFF" 
+                        stroke-width="2"
+                      />
+                    </svg>
+                    <!-- 网格线 -->
+                    <div class="grid-lines">
+                      <div v-for="i in 4" :key="i" class="grid-line" :style="{bottom: `${i * 25}%`}"></div>
+                    </div>
+                  </div>
+                  <div class="chart-x-axis">
+                    <div v-for="(date, index) in ['02.09', '02.17', '02.25', '03.05', '03.13', '03.21', '03.29', '04.06', '04.14']" :key="index" class="date-label" :style="{left: `${index * 12.5}%`}">
+                      {{ date }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -124,6 +321,17 @@ export default defineComponent({
     // 添加分页相关变量
     const currentPage = ref(1);
     const hasMorePosts = ref(true);
+    
+    // 添加数据分析相关变量
+    const showAnalytics = ref(false);
+    const currentPostAnalytics = ref(null);
+    const analyticsLoading = ref(false);
+    
+    // 模拟图表数据
+    const viewsChartData = ref({
+      labels: [],
+      data: []
+    });
 
     // 获取用户帖子列表
     const fetchUserPosts = async (reset = true) => {
@@ -182,6 +390,88 @@ export default defineComponent({
       }
     };
     
+    // 获取帖子分析数据
+    const fetchPostAnalytics = async (postId) => {
+      analyticsLoading.value = true;
+      
+      try {
+        // 这里应该调用实际的API，现在使用模拟数据
+        // const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+        // const response = await axios.get(`http://localhost:7070/api/posts/${postId}/analytics`, {
+        //   headers: {
+        //     'Authorization': `Bearer ${jwtToken}`
+        //   }
+        // });
+        
+        // 模拟API响应
+        const post = userPosts.value.find(p => p.id === postId);
+        if (!post) {
+          throw new Error('帖子不存在');
+        }
+        
+        // 生成过去30天的日期标签
+        const dates = [];
+        const viewsData = [];
+        const now = new Date();
+        
+        for (let i = 30; i >= 0; i--) {
+          const date = new Date(now);
+          date.setDate(date.getDate() - i);
+          
+          // 格式化为MM-DD
+          const month = (date.getMonth() + 1).toString().padStart(2, '0');
+          const day = date.getDate().toString().padStart(2, '0');
+          dates.push(`${month}.${day}`);
+          
+          // 生成随机浏览量，但确保总量正确
+          let randomViews = 0;
+          if (i === 0) {
+            // 最后一天确保总和等于实际浏览量
+            const sum = viewsData.reduce((a, b) => a + b, 0);
+            randomViews = Math.max(0, post.viewsCount - sum);
+          } else if (i < 3) {
+            // 最近几天浏览量较高
+            randomViews = Math.floor(Math.random() * 20);
+          } else {
+            // 较早的天数浏览量较少
+            randomViews = Math.floor(Math.random() * 10);
+          }
+          
+          viewsData.push(randomViews);
+        }
+        
+        viewsChartData.value = {
+          labels: dates,
+          data: viewsData
+        };
+        
+        // 构建分析数据对象
+        currentPostAnalytics.value = {
+          title: post.title,
+          section: post.section?.sectionName || '未分类',
+          postDate: post.postDate,
+          viewsCount: post.viewsCount || 0,
+          avgViewTime: Math.floor(Math.random() * 60) + 10, // 模拟10-70秒的平均浏览时间
+          likesCount: post.likesCount || 0,
+          commentsCount: post.commentsCount || 0,
+          shareCount: 0, // 模拟数据
+          favoriteCount: 0, // 模拟数据
+          likeRate: post.viewsCount ? ((post.likesCount / post.viewsCount) * 100).toFixed(1) : '0.0',
+          commentRate: post.viewsCount ? ((post.commentsCount / post.viewsCount) * 100).toFixed(1) : '0.0',
+          shareRate: '0.0', // 模拟数据
+          favoriteRate: '0.0', // 模拟数据
+          newFans: Math.floor(Math.random() * 10) // 模拟新增粉丝
+        };
+        
+        showAnalytics.value = true;
+      } catch (error) {
+        console.error('获取帖子分析数据失败:', error);
+        ElMessage.error('获取帖子分析数据失败');
+      } finally {
+        analyticsLoading.value = false;
+      }
+    };
+    
     // 加载更多帖子
     const loadMorePosts = async () => {
       if (isLoading.value || !hasMorePosts.value) return;
@@ -201,6 +491,17 @@ export default defineComponent({
     // 查看帖子详情
     const viewPostDetail = (postId) => {
       router.push(`/post-detail?postId=${postId}`);
+    };
+    
+    // 查看帖子分析
+    const viewPostAnalytics = (postId) => {
+      fetchPostAnalytics(postId);
+    };
+    
+    // 关闭分析面板
+    const closeAnalytics = () => {
+      showAnalytics.value = false;
+      currentPostAnalytics.value = null;
     };
 
     // 编辑帖子
@@ -301,11 +602,17 @@ export default defineComponent({
       totalLikes,
       totalComments,
       viewPostDetail,
+      viewPostAnalytics,
       editPost,
       confirmDelete,
       hasMorePosts,
       loadMorePosts,
-      formatDate
+      formatDate,
+      showAnalytics,
+      currentPostAnalytics,
+      analyticsLoading,
+      closeAnalytics,
+      viewsChartData
     };
   }
 });
@@ -329,12 +636,32 @@ html, body, #app {
 }
 
 .posts-list {
-  scrollbar-width: auto !important; /* Firefox */
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+  margin-top: 130px; /* 为顶部固定的内容区域留出空间 */
+  margin-bottom: 20px;
+  height: calc(100vh - 295px); /* 设置固定高度 */
+  overflow-y: auto; /* 允许垂直滚动 */
+  scrollbar-width: none; /* Firefox 隐藏滚动条 */
+  -ms-overflow-style: none; /* IE and Edge 隐藏滚动条 */
 }
 
+/* 隐藏Chrome、Safari等浏览器的滚动条 */
 .posts-list::-webkit-scrollbar {
-  display: block !important; /* Chrome, Safari, Edge */
-  width: 8px;
+  display: none;
+}
+
+/* 清除之前的滚动条样式 */
+.posts-list::-webkit-scrollbar-track,
+.posts-list::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+/* 添加平滑滚动效果 */
+.posts-list, .analytics-panel {
+  scroll-behavior: smooth;
 }
 
 /* 修改布局样式，使其与Index页面一致 */
@@ -424,18 +751,19 @@ main {
   margin-top: 130px; /* 为顶部固定的内容区域留出空间 */
   height: calc(100vh - 295px); /* 设置固定高度 */
   overflow-y: auto; /* 允许垂直滚动 */
+  scrollbar-width: none; /* Firefox 隐藏滚动条 */
+  -ms-overflow-style: none; /* IE and Edge 隐藏滚动条 */
 }
 
-/* 添加滚动条样式 */
+/* 隐藏Chrome、Safari等浏览器的滚动条 */
 .posts-list::-webkit-scrollbar {
-  width: 8px;
+  display: none;
 }
-.posts-list::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
+
+/* 清除之前的滚动条样式 */
+.posts-list::-webkit-scrollbar-track,
 .posts-list::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
+  background: transparent;
 }
 
 .loading, .no-posts {
@@ -449,6 +777,7 @@ main {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  padding-bottom: 40px; /* 添加底部内边距，允许上滑空间 */
 }
 
 /* 帖子样式 */
@@ -648,5 +977,299 @@ main {
 .all-loaded-message {
   color: #999;
   font-style: italic;
+}
+
+/* 量化数据分析面板样式 */
+.analytics-panel {
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+  margin-top: 130px;
+  height: calc(100vh - 295px);
+  overflow-y: auto;
+}
+
+.analytics-header {
+  margin-bottom: 20px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+}
+
+.analytics-title {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: #409EFF;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 5px 10px;
+  margin-right: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.back-button:before {
+  content: '←';
+  margin-right: 5px;
+}
+
+.analytics-title h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.post-basic-info h3 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.post-meta-info {
+  display: flex;
+  gap: 15px;
+  font-size: 13px;
+  color: #666;
+}
+
+.section-label {
+  background-color: #f0f2f5;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.analytics-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  color: #999;
+}
+
+.analytics-content {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.analytics-section {
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  padding: 15px;
+}
+
+.analytics-section h4 {
+  margin: 0 0 15px 0;
+  font-size: 15px;
+  color: #333;
+  font-weight: 600;
+}
+
+.analytics-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.analytics-stats-row:last-child {
+  margin-bottom: 0;
+}
+
+.analytics-stat-item {
+  background-color: white;
+  padding: 12px;
+  border-radius: 6px;
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.analytics-stat-item.wide {
+  flex: 2;
+}
+
+.analytics-label {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.analytics-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* 图表样式 */
+.chart-container {
+  display: flex;
+  height: 250px;
+  position: relative;
+}
+
+.chart-y-axis {
+  width: 40px;
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-top: 10px;
+}
+
+.y-axis-label {
+  font-size: 12px;
+  color: #999;
+  text-align: right;
+  padding-right: 5px;
+}
+
+.chart-area {
+  flex: 1;
+  position: relative;
+  padding-top: 10px;
+}
+
+.chart-line {
+  position: relative;
+  width: 100%;
+  background-image: linear-gradient(to bottom, #f0f0f0 1px, transparent 1px);
+  background-size: 100% 50px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.chart-bar {
+  position: absolute;
+  bottom: 0;
+  width: 3px;
+  background-color: #409EFF;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.3s;
+}
+
+.chart-x-axis {
+  height: 30px;
+  position: relative;
+  margin-top: 5px;
+}
+
+.x-axis-label {
+  position: absolute;
+  font-size: 11px;
+  color: #999;
+  transform: translateX(-50%) rotate(45deg);
+  transform-origin: top left;
+  white-space: nowrap;
+}
+
+/* 增加指针样式，表示可点击 */
+.post-item {
+  cursor: pointer;
+}
+
+.post-title {
+  cursor: text;
+}
+
+/* 互动数据样式 */
+.interaction-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.analytics-stat-box {
+  background-color: white;
+  padding: 12px;
+  border-radius: 6px;
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* 互动趋势图样式 */
+.interaction-chart-container {
+  margin-top: 20px;
+  display: flex;
+  height: 250px;
+  position: relative;
+}
+
+.trend-line-chart {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  border-bottom: 1px solid #eee;
+  background-image: linear-gradient(to bottom, #f0f0f0 1px, transparent 1px);
+  background-size: 100% 50px;
+}
+
+.grid-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.grid-line {
+  position: absolute;
+  width: 100%;
+  height: 1px;
+  background-color: #eee;
+}
+
+.chart-x-axis {
+  height: 30px;
+  position: absolute;
+  bottom: -30px;
+  left: 40px;
+  right: 0;
+}
+
+.date-label {
+  position: absolute;
+  font-size: 11px;
+  color: #999;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+svg polyline {
+  stroke: #409EFF;
+  stroke-width: 2;
+  fill: none;
+}
+
+/* 粉丝板块样式 */
+.fans-section {
+  margin-top: 20px;
+  margin-bottom: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
 }
 </style>
