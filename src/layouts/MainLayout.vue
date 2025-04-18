@@ -24,8 +24,8 @@
             <img :src="userInfo.avatar" alt="用户头像" class="avatar" />
             <span class="username">{{ userInfo.username }}</span>
             <div v-if="isDropdownVisible" class="dropdown">
-              <div class="dropdown-item" @click="goToUserProfile">用户中心</div>
-              <div class="dropdown-item" @click="handleLogout">退出登录</div>
+              <div class="dropdown-item" @click.stop="goToUserProfile">用户中心</div>
+              <div class="dropdown-item" @click.stop="handleLogout">退出登录</div>
             </div>
           </div>
         </div>
@@ -162,6 +162,9 @@ const getCaptcha = async () => {
 }
 // 退出登录方法
 const handleLogout = () => {
+  // 关闭下拉菜单
+  isDropdownVisible.value = false;
+  // 执行退出操作
   authStore.logout(); // 调用 logout 方法
   router.push({ name: 'Index' }); // 退出后跳转到首页
 };
@@ -210,7 +213,23 @@ const goToPage = (path) => {
 
 const goToUserProfile = () => {
   if (isLoggedIn.value && userInfo.value.id) {
-    router.push(`/user/${userInfo.value.id}`);
+    // 关闭下拉菜单
+    isDropdownVisible.value = false;
+    
+    // 获取当前路由和目标路由
+    const currentRoute = router.currentRoute.value;
+    const targetPath = `/user/${userInfo.value.id}`;
+    
+    // 检查是否已经在用户页面，但查看的是不同用户
+    if (currentRoute.path.startsWith('/user/') && currentRoute.path !== targetPath) {
+      // 强制刷新当前组件
+      router.replace({ path: '/temp-redirect' }).then(() => {
+        router.replace({ path: targetPath });
+      });
+    } else {
+      // 普通跳转
+      router.push(targetPath);
+    }
   }
 };
 

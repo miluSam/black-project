@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router';
 import Index from '../views/Index.vue'// 假设你有一个 Home 组件作为首页
 import CreatorCenter from '../views/CreatorCenter.vue';
 import ContentManagement from '../views/ContentManagement.vue';
-import UserCenter from '../views/UserCenter.vue';
 import MainLayout from '../layouts/MainLayout.vue'
 import PostDetail from '../views/PostDetail.vue';
 import { useAuthStore } from '../stores/auth.js';
@@ -29,12 +28,7 @@ const routes = [
                 component: ContentManagement,
                 meta: { requiresAuth: true } // 需要登录
             },
-            {
-                path: '/user-center',
-                name: 'UserCenter',
-                component: UserCenter,
-                meta: { requiresAuth: true } // 需要登录
-            },
+
             {
                 path: '/post-detail',
                 name: 'PostDetail',
@@ -45,6 +39,13 @@ const routes = [
                 path: '/user/:userId',
                 name: 'UserProfile',
                 component: () => import('../views/UserProfile.vue')
+            },
+            {
+                path: '/temp-redirect',
+                name: 'TempRedirect',
+                component: {
+                    render: () => null
+                }
             }
         ]
     }

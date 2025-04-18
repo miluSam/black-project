@@ -213,7 +213,7 @@
 </template>
 
 <script>
-import { defineComponent, ref, onMounted, onBeforeUnmount, computed} from 'vue';
+import { defineComponent, ref, onMounted, onBeforeUnmount, computed, watch} from 'vue';
 import axios from 'axios';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
@@ -625,6 +625,16 @@ export default defineComponent({
         console.error('更新头像失败:', error);
       }
     };
+
+    // 监听路由参数变化
+    watch(() => route.params.userId, (newUserId) => {
+      if (newUserId && newUserId !== userId.value) {
+        userId.value = newUserId;
+        // 重新加载用户数据
+        fetchUserProfile();
+        fetchUserPosts();
+      }
+    });
 
     // 组件挂载时获取数据
     onMounted(() => {

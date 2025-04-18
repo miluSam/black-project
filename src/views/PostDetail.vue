@@ -8,8 +8,8 @@
       <div class="post-wrapper">
         <div class="post-detail" v-if="post">
           <div class="user-info">
-            <img :src="post.user.imageUrl" alt="用户头像" class="avatar">
-            <span class="username">{{ post.user.username }}</span>
+            <img @click="goToUserProfile(post.user.id)" :src="post.user.imageUrl" alt="用户头像" class="avatar" style="cursor: pointer">
+            <span @click="goToUserProfile(post.user.id)" class="username" style="cursor: pointer">{{ post.user.username }}</span>
           </div>
           <h1>{{ post.title }}</h1>
           <div class="post-content">{{ post.content }}</div>
@@ -52,7 +52,7 @@
       <i class="like-icon">👍</i>
       <span>{{ post.likesCount }}</span>
     </div>
-    <div class="comment-count">
+    <div class="comment-count" @click="createNewComment">
       <i class="comment-icon">💬</i>
       <span>{{ post.commentsCount }}</span>
     </div>
@@ -62,28 +62,53 @@
     <h3>评论 ({{ post.commentsCount }})</h3>
     
     <div v-for="comment in post.comments" :key="comment.id" class="comment">
-      <!-- 父评论区域 - 添加点击事件 -->
-      <div class="comment-header" @click="setReplyContext(comment.id, comment.user?.id)" @contextmenu.prevent="showDeleteMenu($event, comment.id)">
-  <img :src="comment.user?.imageUrl || 'default-avatar.jpg'" alt="用户头像" class="avatar">
-  <span class="username">{{ comment.user?.username || '匿名用户' }}</span>
-</div>
+      <!-- 父评论区域 - 添加用户头像和用户名的右键菜单事件 -->
+      <div class="comment-header" 
+           @contextmenu.prevent="showDeleteMenu($event, comment.id, comment.user?.id)">
+        <img :src="comment.user?.imageUrl || 'default-avatar.jpg'" 
+             alt="用户头像" 
+             class="avatar" 
+             @click.stop="goToUserProfile(comment.user?.id)" 
+             @contextmenu.prevent.stop="showUserMenu($event, comment.user?.id)"
+             style="cursor: pointer">
+        <span class="username" 
+              @click.stop="goToUserProfile(comment.user?.id)" 
+              @contextmenu.prevent.stop="showUserMenu($event, comment.user?.id)"
+              style="cursor: pointer">
+          {{ comment.user?.username || '匿名用户' }}
+        </span>
+      </div>
 
-      <div class="comment-content">
+      <div class="comment-content" 
+           @click="setReplyContext(comment.id, comment.user?.id)"
+           @contextmenu.prevent="showDeleteMenu($event, comment.id, comment.user?.id)" 
+           style="cursor: pointer; position: relative;">
         <p>{{ comment.commentText }}</p>
         <span class="comment-date">{{ formatDate(comment.commentDate) }}</span>
       </div>
       
-      <!-- 子评论部分 - 添加点击事件 -->
+      <!-- 子评论部分 - 添加用户头像和用户名的右键菜单事件 -->
    <!-- 修改后的子评论部分 -->
 <div v-if="comment.childComments && comment.childComments.length" class="replies-container">
   <div v-for="reply in comment.childComments" 
        :key="reply.id" 
        class="reply"
-       @click="setReplyContext(comment.id, reply.user?.id)">
-    <span class="reply-username">{{ reply.user?.username || '匿名用户' }}</span>
+       @click="setReplyContext(comment.id, reply.user?.id)"
+       @contextmenu.prevent="showDeleteMenu($event, reply.id, reply.user?.id)">
+    <span class="reply-username" 
+          @click.stop="goToUserProfile(reply.user?.id)" 
+          @contextmenu.prevent.stop="showUserMenu($event, reply.user?.id)"
+          style="cursor: pointer">
+      {{ reply.user?.username || '匿名用户' }}
+    </span>
     <template v-if="reply.replyToUser">
       <span class="reply-to-text">回复</span>
-      <span class="reply-target">@{{ reply.replyToUser.username }}</span>
+      <span class="reply-target" 
+            @click.stop="goToUserProfile(reply.replyToUser?.id)" 
+            @contextmenu.prevent.stop="showUserMenu($event, reply.replyToUser?.id)"
+            style="cursor: pointer">
+        @{{ reply.replyToUser.username }}
+      </span>
     </template>
     <span class="reply-content">: {{ reply.commentText }}</span>
   </div>
@@ -110,18 +135,39 @@
          class="context-menu" 
          :style="{top: `${contextMenu.y}px`, left: `${contextMenu.x}px`}"
          @click.stop>
-      <div class="menu-item delete" @click="deleteComment(contextMenu.commentId)">
+      <div v-if="contextMenu.type === 'delete' && contextMenu.canDelete" class="menu-item delete" @click="deleteComment(contextMenu.commentId)">
         <i class="el-icon-delete"></i> 删除评论
+      </div>
+      <div v-if="contextMenu.type === 'user' && contextMenu.userId !== authStore.userInfo.id" class="menu-item" @click="sendMessage(contextMenu.userId)">
+        <i class="el-icon-message"></i> 发送私信
+      </div>
+      <div v-if="contextMenu.type === 'user'" class="menu-item" @click="goToUserProfile(contextMenu.userId)">
+        <i class="el-icon-user"></i> 查看主页
       </div>
     </div>
     
+    <!-- 私信弹窗 -->
+    <div v-if="showMessageDialog" class="message-dialog-overlay">
+      <div class="message-dialog">
+        <div class="message-dialog-header">
+          <h3>发送私信给 {{ messageTargetUser?.username || '用户' }}</h3>
+          <button class="close-btn" @click="closeMessageDialog">×</button>
+        </div>
+        <div class="message-dialog-body">
+          <textarea v-model="messageContent" placeholder="请输入私信内容..." @keyup.enter="submitMessage"></textarea>
+        </div>
+        <div class="message-dialog-footer">
+          <button class="cancel-btn" @click="closeMessageDialog">取消</button>
+          <button class="send-btn" @click="submitMessage" :disabled="!messageContent.trim()">发送</button>
+        </div>
+      </div>
+    </div>
   </div>
-  
 </template>
 
 <script>
 import { defineComponent, ref, onMounted, computed, onBeforeUnmount } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { useAuthStore } from '../stores/auth.js';
 import { ElMessage } from 'element-plus'
@@ -130,6 +176,7 @@ export default defineComponent({
   name: 'PostDetail',
   setup() {
     const route = useRoute();
+    const router = useRouter();
     const post = ref(null);
     const isLoading = ref(true);
     const error = ref(null);
@@ -149,8 +196,17 @@ export default defineComponent({
       visible: false,
       x: 0,
       y: 0,
-      commentId: null
+      commentId: null,
+      type: null, // 'delete' 或 'user'
+      userId: null,
+      canDelete: false
     });
+    
+    // 添加私信相关变量
+    const showMessageDialog = ref(false);
+    const messageContent = ref('');
+    const messageTargetUserId = ref(null);
+    const messageTargetUser = ref(null);
     
     // 关闭上下文菜单
     const closeContextMenu = () => {
@@ -373,28 +429,77 @@ const sendComment = async () => {
       }
     };
 
-    // 显示上下文菜单
-    const showDeleteMenu = (event, commentId) => {
+    // 显示评论的上下文菜单
+    const showDeleteMenu = (event, commentId, userId) => {
       // 阻止默认右键菜单
       event.preventDefault();
       
-      // 只有当评论是当前用户发布的，或者当前用户是管理员时才允许删除
-      if (!authStore.isLoggedIn) return;
+      // 调试日志
+      console.log('showDeleteMenu triggered', { commentId, userId, authUserID: authStore.userInfo?.id });
       
-      const isCommentOwner = post.value.comments.some(comment => 
-        comment.id === commentId && comment.user?.id === authStore.userInfo.id
-      );
-      
-      const isAdmin = authStore.userInfo.role === 'ADMIN';
-      
-      if (isCommentOwner || isAdmin) {
-        // 显示上下文菜单
-        contextMenu.value.x = event.clientX;
-        contextMenu.value.y = event.clientY;
-        contextMenu.value.commentId = commentId;
-        contextMenu.value.visible = true;
-        event.stopPropagation(); // 阻止事件冒泡
+      // 检查是否登录
+      if (!authStore.isLoggedIn) {
+        console.log('Not logged in, returning');
+        return;
       }
+      
+      // 检查是否是评论所有者或管理员
+      const isCommentOwner = userId === authStore.userInfo.id;
+      const isAdmin = authStore.userInfo.role === 'ADMIN';
+      const canDelete = isCommentOwner || isAdmin;
+      
+      console.log('Permission check:', { isCommentOwner, isAdmin, canDelete });
+      
+      // 显示上下文菜单，不管是否有权限，先显示菜单
+      // 确保菜单不超出视口边界
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const menuWidth = 150; // 预估的菜单宽度
+      const menuHeight = 100; // 预估的菜单高度
+      
+      let x = event.clientX;
+      let y = event.clientY;
+      
+      // 避免菜单超出右边界
+      if (x + menuWidth > viewportWidth) {
+        x = viewportWidth - menuWidth - 5;
+      }
+      
+      // 避免菜单超出底部边界
+      if (y + menuHeight > viewportHeight) {
+        y = viewportHeight - menuHeight - 5;
+      }
+      
+      contextMenu.value = {
+        x: x,
+        y: y,
+        commentId: commentId,
+        type: 'delete',
+        userId: userId,
+        visible: true,
+        canDelete: canDelete
+      };
+      
+      event.stopPropagation(); // 阻止事件冒泡
+    };
+
+    // 显示用户上下文菜单
+    const showUserMenu = (event, userId) => {
+      // 阻止默认右键菜单
+      event.preventDefault();
+      
+      if (!userId || !authStore.isLoggedIn) return;
+      
+      // 显示上下文菜单
+      contextMenu.value = {
+        x: event.clientX,
+        y: event.clientY,
+        type: 'user',
+        userId: userId,
+        visible: true
+      };
+      
+      event.stopPropagation(); // 阻止事件冒泡
     };
 
     // 执行删除评论的操作
@@ -432,6 +537,84 @@ const sendComment = async () => {
       document.querySelector('.fixed-comment-input textarea')?.focus();
     };
 
+    // 跳转到用户主页
+    const goToUserProfile = (userId) => {
+      if (userId) {
+        router.push(`/user/${userId}`);
+      }
+    };
+
+    // 实现发送私信的功能
+    const sendMessage = async (userId) => {
+      if (!authStore.isLoggedIn || !userId) return;
+      
+      try {
+        const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+        const config = {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`
+          }
+        };
+        
+        // 获取用户信息
+        const response = await axios.get(`/api/users/${userId}`, config);
+        messageTargetUser.value = response.data;
+        messageTargetUserId.value = userId;
+        showMessageDialog.value = true;
+        closeContextMenu();
+      } catch (error) {
+        console.error('获取用户信息失败:', error);
+        ElMessage.error('无法获取用户信息');
+      }
+    };
+
+    // 关闭私信对话框
+    const closeMessageDialog = () => {
+      showMessageDialog.value = false;
+      messageContent.value = '';
+    };
+
+    // 提交私信
+    const submitMessage = async () => {
+      if (!messageContent.value.trim() || !messageTargetUserId.value) return;
+      
+      try {
+        const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+        const config = {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`
+          }
+        };
+        
+        await axios.post('/api/messages/send', {
+          recipientId: messageTargetUserId.value,
+          content: messageContent.value
+        }, config);
+        
+        ElMessage.success('私信发送成功');
+        closeMessageDialog();
+      } catch (error) {
+        console.error('发送私信失败:', error);
+        ElMessage.error('发送私信失败');
+      }
+    };
+
+    // 添加createNewComment方法
+    const createNewComment = () => {
+      // 清空回复上下文，准备创建新的父评论
+      replyContext.value = {
+        parentCommentId: null,
+        replyToUserId: null
+      };
+      // 聚焦输入框
+      document.querySelector('.fixed-comment-input textarea')?.focus();
+      // 可以根据需要，滚动到评论输入框位置
+      window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: 'smooth'
+      });
+    };
+
     return { 
       post, 
       isLoading, 
@@ -442,6 +625,7 @@ const sendComment = async () => {
       contextMenu,
       closeContextMenu,
       setReplyContext,
+      createNewComment,
       fetchComments,
       nextImage,
       prevImage,
@@ -450,7 +634,16 @@ const sendComment = async () => {
       toggleLike,
       checkLikeStatus,
       showDeleteMenu,
-      deleteComment
+      showUserMenu,
+      deleteComment,
+      goToUserProfile,
+      sendMessage,
+      showMessageDialog,
+      messageContent,
+      messageTargetUser,
+      closeMessageDialog,
+      submitMessage,
+      authStore
     };
   }
 });
@@ -707,6 +900,12 @@ main {
 .comment {
   border-bottom: 1px solid #ddd;
   padding: 15px 0;
+  transition: background-color 0.2s;
+  border-radius: 4px;
+}
+
+.comment:hover {
+  background-color: #f5f5f5;
 }
 
 .comment:last-child {
@@ -734,6 +933,7 @@ main {
 
 .comment-content {
   margin-left: 40px;
+  cursor: pointer; /* 添加鼠标指针样式 */
 }
 
 .comment-content p {
@@ -761,6 +961,9 @@ main {
 }
 
 .reply {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   font-size: 13px;
   line-height: 1.5;
   padding: 5px 0;
@@ -770,7 +973,23 @@ main {
 .reply-username {
   font-weight: 500;
   color: #409EFF;
+  margin-right: 5px;
 }
+
+.reply-to-text {
+  margin: 0 5px;
+  color: #666;
+}
+
+.reply-target {
+  color: #409EFF;
+  margin-right: 5px;
+}
+
+.reply-content {
+  word-break: break-word;
+}
+
 /* 右边块 */
 .right-block {
   width: 350px;
@@ -841,12 +1060,12 @@ main {
   color: #666;
 }
 
-/* 修改固定评论输入框样式 */
+/* 修改固定评论输入框样式以确保与中间内容对齐 */
 .fixed-comment-input {
   position: fixed;
   bottom: 0;
-  left: 44.4%; /* 居中定位 */
-  transform: translateX(-50%); /* 精确居中 */
+  left: 50%; /* 居中基于视口 */
+  transform: translateX(-50%); /* 水平居中 */
   width: 610px; /* 与.post-detail同宽 */
   background-color: white;
   padding: 10px 20px; /* 左右内边距与.post-detail一致 */
@@ -854,6 +1073,7 @@ main {
   box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
   z-index: 100;
   box-sizing: border-box; /* 确保宽度包含内边距 */
+  margin-left: -100px; /* 补偿左侧边栏的宽度一半，使其与中间内容对齐 */
 }
 
 .comment-input-container {
@@ -898,47 +1118,15 @@ main {
 .comment-header, .reply {
   cursor: pointer;
   transition: background-color 0.2s;
+  border-radius: 4px;
 }
 
 .comment-header:hover {
   background-color: #f5f5f5;
-  border-radius: 4px;
-  padding: 2px 5px;
 }
 
 .reply:hover {
   background-color: #f0f0f0;
-  border-radius: 4px;
-  padding: 2px 5px;
-}
-.reply {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  font-size: 13px;
-  line-height: 1.5;
-  padding: 5px 0;
-  color: #666;
-}
-
-.reply-username {
-  font-weight: 500;
-  color: #409EFF;
-  margin-right: 5px;
-}
-
-.reply-to-text {
-  margin: 0 5px;
-  color: #666;
-}
-
-.reply-target {
-  color: #409EFF;
-  margin-right: 5px;
-}
-
-.reply-content {
-  word-break: break-word;
 }
 
 /* 添加点赞和评论计数区域样式 */
@@ -956,15 +1144,20 @@ main {
   gap: 8px;
   font-size: 14px;
   color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 5px 10px;
+  border-radius: 4px;
+}
+
+.like-button:hover, .comment-count:hover {
+  color: #409EFF;
+  background-color: #f0f7ff;
 }
 
 .like-button {
   cursor: pointer;
   transition: all 0.2s;
-}
-
-.like-button:hover {
-  color: #409EFF;
 }
 
 .like-button.liked {
@@ -975,7 +1168,7 @@ main {
   font-size: 18px;
 }
 
-/* 上下文菜单样式 */
+/* 修改上下文菜单样式 */
 .context-menu {
   position: fixed;
   background: white;
@@ -983,7 +1176,8 @@ main {
   border-radius: 4px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
   z-index: 1000;
-  min-width: 100px;
+  min-width: 120px;
+  padding: 5px 0;
 }
 
 .menu-item {
@@ -992,6 +1186,7 @@ main {
   display: flex;
   align-items: center;
   gap: 8px;
+  transition: background-color 0.2s;
 }
 
 .menu-item:hover {
@@ -1000,5 +1195,93 @@ main {
 
 .menu-item.delete {
   color: #f56c6c;
+}
+
+/* 私信对话框样式 */
+.message-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.message-dialog {
+  background: white;
+  width: 400px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+.message-dialog-header {
+  padding: 15px 20px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.message-dialog-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #909399;
+}
+
+.message-dialog-body {
+  padding: 20px;
+}
+
+.message-dialog-body textarea {
+  width: 100%;
+  height: 100px;
+  padding: 10px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  resize: none;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.message-dialog-footer {
+  padding: 10px 20px;
+  text-align: right;
+  border-top: 1px solid #eee;
+}
+
+.message-dialog-footer button {
+  padding: 8px 15px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  margin-left: 10px;
+  font-size: 14px;
+}
+
+.cancel-btn {
+  background: #f0f2f5;
+  color: #606266;
+}
+
+.send-btn {
+  background: #409EFF;
+  color: white;
+}
+
+.send-btn:disabled {
+  background: #a0cfff;
+  cursor: not-allowed;
 }
 </style>
