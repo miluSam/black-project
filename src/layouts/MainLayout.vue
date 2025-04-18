@@ -9,10 +9,16 @@
         </div>
       </div>
 
-      <!-- Center Section (Search Bar) -->
-      <div class="search-bar">
-        <input type="text" v-model="searchQuery" placeholder="搜索帖子/游戏" @keyup.enter="search" />
-        <i class="el-icon-search" @click="search"></i>
+      <!-- Center Section (Search Bar or Page Title) -->
+      <div class="center-section">
+        <!-- 在内容管理页面显示标题 -->
+        <h1 v-if="isContentManagementPage" class="page-title">内容管理</h1>
+        
+        <!-- 在其他页面显示搜索框 -->
+        <div v-else class="search-bar">
+          <input type="text" v-model="searchQuery" placeholder="搜索帖子/游戏" @keyup.enter="search" />
+          <i class="el-icon-search" @click="search"></i>
+        </div>
       </div>
 
       <!-- Right Section Wrapper -->
@@ -232,6 +238,13 @@ const goToUserProfile = () => {
     }
   }
 };
+
+// 添加页面类型检测变量
+const isContentManagementPage = computed(() => {
+  // 检查是否在内容管理页面
+  return router.currentRoute.value.path === '/content-management' ||
+         document.body.classList.contains('content-management-page');
+});
 
 </script>
 
@@ -524,5 +537,23 @@ body {
 
 .login-prompt-content button:hover {
   background-color: #66b1ff;
+}
+
+.center-section {
+  max-width: 610px;
+  width: 610px;
+  margin: 0 20px;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-title {
+  font-size: 22px;
+  color: #333;
+  margin: 0;
+  font-weight: bold;
 }
 </style>    
