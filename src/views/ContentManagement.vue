@@ -222,10 +222,11 @@
                 </div>
                 <div class="chart-area">
                   <div class="trend-line-chart">
-                    <svg width="100%" height="200" viewBox="0 0 1000 200" preserveAspectRatio="none">
-                      <!-- 示例折线，真实数据应从API获取 -->
+                    <svg v-if="viewsChartData && viewsChartData.data && viewsChartData.data.length > 0" 
+                         width="100%" height="200" viewBox="0 0 1000 200" preserveAspectRatio="none">
+                      <!-- 动态生成折线，使用后端返回的数据 -->
                       <polyline 
-                        points="0,200 100,180 200,190 300,100 400,180 500,200 600,190 700,195 800,190 900,180 1000,190" 
+                        :points="generateChartPoints(viewsChartData.data)" 
                         fill="none" 
                         stroke="#409EFF" 
                         stroke-width="2"
@@ -237,7 +238,10 @@
                     </div>
                   </div>
                   <div class="chart-x-axis">
-                    <div v-for="(date, index) in ['02.09', '02.17', '02.25', '03.05', '03.13', '03.21', '03.29', '04.06', '04.14']" :key="index" class="date-label" :style="{left: `${index * 12.5}%`}">
+                    <div v-for="(date, index) in viewsChartData.labels" :key="index" 
+                         class="date-label" 
+                         :style="{left: `${index * (100 / (viewsChartData.labels.length - 1))}%`}"
+                         v-show="index % 5 === 0 || index === viewsChartData.labels.length - 1">
                       {{ date }}
                     </div>
                   </div>
@@ -296,7 +300,7 @@
 </template>
 
 <script>
-import { defineComponent, ref, onMounted, onBeforeUnmount } from 'vue';
+import { defineComponent, ref, onMounted, onBeforeUnmount} from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import axios from 'axios';
@@ -395,78 +399,50 @@ export default defineComponent({
       analyticsLoading.value = true;
       
       try {
-        // 这里应该调用实际的API，现在使用模拟数据
-        // const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-        // const response = await axios.get(`http://localhost:7070/api/posts/${postId}/analytics`, {
-        //   headers: {
-        //     'Authorization': `Bearer ${jwtToken}`
-        //   }
-        // });
-        
-        // 模拟API响应
-        const post = userPosts.value.find(p => p.id === postId);
-        if (!post) {
-          throw new Error('帖子不存在');
-        }
-        
-        // 生成过去30天的日期标签
-        const dates = [];
-        const viewsData = [];
-        const now = new Date();
-        
-        for (let i = 30; i >= 0; i--) {
-          const date = new Date(now);
-          date.setDate(date.getDate() - i);
-          
-          // 格式化为MM-DD
-          const month = (date.getMonth() + 1).toString().padStart(2, '0');
-          const day = date.getDate().toString().padStart(2, '0');
-          dates.push(`${month}.${day}`);
-          
-          // 生成随机浏览量，但确保总量正确
-          let randomViews = 0;
-          if (i === 0) {
-            // 最后一天确保总和等于实际浏览量
-            const sum = viewsData.reduce((a, b) => a + b, 0);
-            randomViews = Math.max(0, post.viewsCount - sum);
-          } else if (i < 3) {
-            // 最近几天浏览量较高
-            randomViews = Math.floor(Math.random() * 20);
-          } else {
-            // 较早的天数浏览量较少
-            randomViews = Math.floor(Math.random() * 10);
+        const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+        const response = await axios.get(`http://localhost:7070/api/posts/${postId}/analytics`, {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`
           }
-          
-          viewsData.push(randomViews);
+        });
+        
+        // 获取API返回的分析数据
+        const analyticsData = response.data;
+        
+        // 设置当前帖子分析数据
+        currentPostAnalytics.value = {
+          title: analyticsData.title,
+          section: analyticsData.section || '未分类',
+          postDate: analyticsData.postDate,
+          viewsCount: analyticsData.viewsCount || 0,
+          avgViewTime: analyticsData.avgViewTime || 0,
+          likesCount: analyticsData.likesCount || 0,
+          commentsCount: analyticsData.commentsCount || 0,
+          shareCount: analyticsData.shareCount || 0,
+          favoriteCount: analyticsData.favoriteCount || 0,
+          likeRate: analyticsData.likeRate || '0.0',
+          commentRate: analyticsData.commentRate || '0.0',
+          shareRate: analyticsData.shareRate || '0.0',
+          favoriteRate: analyticsData.favoriteRate || '0.0',
+          newFans: analyticsData.newFans || 0
+        };
+        
+        // 设置图表数据
+        if (analyticsData.viewsData) {
+          viewsChartData.value = analyticsData.viewsData;
+        } else {
+          // 后备方案：如果API未返回图表数据，则设置空数据
+          viewsChartData.value = {
+            labels: [],
+            data: []
+          };
         }
         
-        viewsChartData.value = {
-          labels: dates,
-          data: viewsData
-        };
-        
-        // 构建分析数据对象
-        currentPostAnalytics.value = {
-          title: post.title,
-          section: post.section?.sectionName || '未分类',
-          postDate: post.postDate,
-          viewsCount: post.viewsCount || 0,
-          avgViewTime: Math.floor(Math.random() * 60) + 10, // 模拟10-70秒的平均浏览时间
-          likesCount: post.likesCount || 0,
-          commentsCount: post.commentsCount || 0,
-          shareCount: 0, // 模拟数据
-          favoriteCount: 0, // 模拟数据
-          likeRate: post.viewsCount ? ((post.likesCount / post.viewsCount) * 100).toFixed(1) : '0.0',
-          commentRate: post.viewsCount ? ((post.commentsCount / post.viewsCount) * 100).toFixed(1) : '0.0',
-          shareRate: '0.0', // 模拟数据
-          favoriteRate: '0.0', // 模拟数据
-          newFans: Math.floor(Math.random() * 10) // 模拟新增粉丝
-        };
-        
+        // 显示分析面板
         showAnalytics.value = true;
       } catch (error) {
         console.error('获取帖子分析数据失败:', error);
-        ElMessage.error('获取帖子分析数据失败');
+        ElMessage.error('获取帖子分析数据失败，请稍后再试');
       } finally {
         analyticsLoading.value = false;
       }
@@ -554,6 +530,28 @@ export default defineComponent({
       }
     };
 
+    // 生成图表点坐标
+    const generateChartPoints = (dataArray) => {
+      if (!dataArray || dataArray.length === 0) return '';
+      
+      // 找出数据中的最大值，用于缩放
+      const maxValue = Math.max(...dataArray);
+      
+      // 生成点坐标
+      const points = dataArray.map((value, index) => {
+        // 横坐标：根据索引平均分布
+        const x = (index / (dataArray.length - 1)) * 1000;
+        
+        // 纵坐标：将值映射到0-200的范围，0是最大值(顶部)，200是最小值(底部)
+        // 如果最大值为0，则所有点都在底部
+        const y = maxValue === 0 ? 200 : 200 - (value / maxValue) * 200;
+        
+        return `${x},${y}`;
+      }).join(' ');
+      
+      return points;
+    };
+
     // 组件挂载时添加滚动控制
     onMounted(() => {
       // 获取用户帖子
@@ -612,7 +610,8 @@ export default defineComponent({
       currentPostAnalytics,
       analyticsLoading,
       closeAnalytics,
-      viewsChartData
+      viewsChartData,
+      generateChartPoints
     };
   }
 });

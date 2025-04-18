@@ -220,13 +220,100 @@ export default defineComponent({
       }
     };
     
+    // 记录帖子浏览记录的函数
+    const recordPostView = async () => {
+      if (!post.value || !post.value.id) return;
+      
+      try {
+        // 获取浏览器和设备信息
+        const deviceInfo = navigator.userAgent;
+        
+        // 生成一个唯一的会话ID (如果不存在)
+        let sessionId = sessionStorage.getItem(`post_${post.value.id}_sessionId`);
+        if (!sessionId) {
+          sessionId = Date.now() + '-' + Math.random().toString(36).substring(2, 15);
+          sessionStorage.setItem(`post_${post.value.id}_sessionId`, sessionId);
+        }
+        
+        // 发送浏览记录到后端
+        await axios.post(`http://localhost:7070/api/posts/${post.value.id}/view`, {
+          deviceInfo,
+          sessionId,
+          ipAddress: '127.0.0.1' // 实际使用中可能由后端自动提取
+        }, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken')}`
+          }
+        });
+        
+        console.log('浏览记录已发送，会话ID:', sessionId);
+      } catch (error) {
+        console.error('记录浏览失败:', error);
+      }
+    };
+    
+    // 记录帖子退出的函数
+    const recordPostExit = async () => {
+      if (!post.value || !post.value.id) return;
+      
+      try {
+        // 获取浏览器和设备信息
+        const deviceInfo = navigator.userAgent;
+        
+        // 获取之前保存的会话ID
+        const sessionId = sessionStorage.getItem(`post_${post.value.id}_sessionId`);
+        if (!sessionId) {
+          console.warn('未找到会话ID，无法完整记录退出');
+        }
+        
+        // 发送退出记录到后端
+        await axios.post(`http://localhost:7070/api/posts/${post.value.id}/exit`, {
+          deviceInfo,
+          sessionId, // 包含会话ID以便后端匹配记录
+          ipAddress: '127.0.0.1' // 实际使用中可能由后端自动提取
+        }, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken')}`
+          }
+        });
+        
+        console.log('退出记录已发送，会话ID:', sessionId);
+      } catch (error) {
+        console.error('记录退出失败:', error);
+      }
+    };
+    
+    // 在页面关闭或导航离开前记录退出
+    const handleBeforeUnload = () => {
+      if (post.value && post.value.id) {
+        recordPostExit();
+      }
+    };
+
     onMounted(() => {
       fetchPostDetail();
       document.addEventListener('click', handleDocumentClick);
+      
+      // 页面加载完成后记录浏览
+      window.addEventListener('load', () => {
+        if (post.value && post.value.id) {
+          recordPostView();
+        }
+      });
+      
+      // 在页面关闭或导航离开前记录退出
+      window.addEventListener('beforeunload', handleBeforeUnload);
     });
     
     onBeforeUnmount(() => {
       document.removeEventListener('click', handleDocumentClick);
+      window.removeEventListener('load', recordPostView);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      
+      // 组件卸载时记录退出
+      if (post.value && post.value.id) {
+        recordPostExit();
+      }
     });
 
     const hotPosts = computed(() => {
@@ -273,6 +360,9 @@ export default defineComponent({
         
         // 获取帖子详情后检查当前用户是否已点赞
         await checkLikeStatus();
+        
+        // 获取帖子详情后记录浏览
+        recordPostView();
       } catch (err) {
         error.value = err.response?.data?.message || err.message || '获取帖子详情失败';
         console.error('Error details:', err);
@@ -643,7 +733,9 @@ const sendComment = async () => {
       messageTargetUser,
       closeMessageDialog,
       submitMessage,
-      authStore
+      authStore,
+      recordPostView,
+      recordPostExit
     };
   }
 });
