@@ -120,7 +120,7 @@
               <div class="analytics-stats-row">
                 <div class="analytics-stat-item">
                   <span class="analytics-label">内容得分</span>
-                  <span class="analytics-value">-</span>
+                  <span class="analytics-value">{{ contentScore.score }}</span>
                 </div>
                 <div class="analytics-stat-item">
                   <span class="analytics-label">浏览量</span>
@@ -883,6 +883,68 @@ export default defineComponent({
     const interactionYAxisValues = computed(() => calculateYAxisValues(interactionChartData.value.data));
     const fansYAxisValues = computed(() => calculateYAxisValues(fansChartData.value.data));
 
+    // 内容得分计算函数
+    const calculateContentScore = (post) => {
+      if (!post) return { score: 0, details: {} };
+      
+      // 1. 基础指标定义
+      const views = post.viewsCount || 0;
+      const avgViewTime = post.avgViewTime || 0; // 秒为单位
+      const likes = post.likesCount || 0;
+      const comments = post.commentsCount || 0;
+      const shares = post.shareCount || 0;
+      const favorites = post.favoriteCount || 0;
+      const newFans = post.newFans || 0;
+      
+      // 2. 互动率计算
+      const engagementRate = views > 0 ? 
+        ((likes + comments * 2 + shares * 3 + favorites * 2) / views) * 100 : 0;
+      
+      // 3. 定义权重
+      const weights = {
+        viewScore: 0.2,      // 浏览得分权重
+        timeScore: 0.25,     // 时长得分权重
+        engagementScore: 0.3, // 互动得分权重
+        fanScore: 0.25       // 粉丝转化权重
+      };
+      
+      // 4. 分项得分计算 (都归一化到0-100分)
+      // 浏览量得分 - 使用对数函数防止大数值过度影响
+      const viewScore = views === 0 ? 0 : Math.min(100, 20 * Math.log10(views + 1));
+      
+      // 平均浏览时长得分 - 最长考虑3分钟，超过3分钟记满分
+      const timeScore = Math.min(100, (avgViewTime / 180) * 100);
+      
+      // 互动率得分 - 高质量内容通常有5%以上互动率
+      const engagementScore = Math.min(100, engagementRate * 20);
+      
+      // 粉丝转化得分 - 每篇文章能带来新粉丝是很有价值的
+      const fanScore = Math.min(100, newFans * 10);
+      
+      // 5. 计算加权总分 (0-100分)
+      const totalScore = Math.round(
+        weights.viewScore * viewScore +
+        weights.timeScore * timeScore +
+        weights.engagementScore * engagementScore + 
+        weights.fanScore * fanScore
+      );
+      
+      return {
+        score: totalScore,
+        details: {
+          viewScore,
+          timeScore,
+          engagementScore,
+          fanScore
+        }
+      };
+    };
+
+    // 添加内容得分计算属性
+    const contentScore = computed(() => {
+      return calculateContentScore(currentPostAnalytics.value);
+    });
+
     // 组件挂载时添加滚动控制
     onMounted(() => {
       // 获取用户帖子
@@ -951,7 +1013,8 @@ export default defineComponent({
       calculateYAxisValues,
       handleChartMouseMove,
       hideTooltip,
-      tooltip
+      tooltip,
+      contentScore
     };
   }
 });
