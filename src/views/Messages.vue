@@ -749,6 +749,11 @@ const loadMessages = async (conversationId) => {
   // 滚动到最新消息
   await nextTick();
   scrollToBottom();
+  
+  // 聚焦到输入框
+  if (messageInputRef.value) {
+    messageInputRef.value.focus();
+  }
 };
 
 // 处理文件上传
@@ -990,6 +995,17 @@ const sendMessage = async () => {
           if (index !== -1) {
             conversations.value[index].id = conversationId;
           }
+          
+          // 保存会话用户ID和会话ID到localStorage，以便页面刷新后恢复
+          const targetUserId = selectedConversation.value.userId || selectedConversation.value.otherUserId;
+          localStorage.setItem('lastMessageUserId', targetUserId);
+          localStorage.setItem('lastConversationId', conversationId);
+          
+          // 刷新页面
+          console.log('发送消息后刷新页面，将重新加载并聚焦会话...');
+          setTimeout(() => {
+            window.location.reload();
+          }, 300); // 短暂延迟确保数据保存完成
         }
       }
       
@@ -1119,6 +1135,17 @@ const retryMessage = async (message) => {
           // 更新当前选中的会话
           selectedConversation.value = newConversation;
           activeConversationId.value = newConversation.id;
+          
+          // 保存会话用户ID和会话ID到localStorage，以便页面刷新后恢复
+          const targetUserId = newConversation.userId || newConversation.otherUserId;
+          localStorage.setItem('lastMessageUserId', targetUserId);
+          localStorage.setItem('lastConversationId', conversationId);
+          
+          // 刷新页面
+          console.log('重发消息后刷新页面，将重新加载并聚焦会话...');
+          setTimeout(() => {
+            window.location.reload();
+          }, 300); // 短暂延迟确保数据保存完成
         }
       }
       
@@ -1569,9 +1596,64 @@ const startConversationWith = async (contact) => {
 };
 
 // 在组件挂载后自动加载会话列表
-onMounted(() => {
-  console.log('私信页面已加载，正在获取会话列表...');
-  loadConversations();
+onMounted(async () => {
+  // 加载会话列表
+  await loadConversations();
+  
+  // 检查是否有从localStorage中恢复的会话
+  const lastUserId = localStorage.getItem('lastMessageUserId');
+  const lastConversationId = localStorage.getItem('lastConversationId');
+  
+  if (lastUserId || lastConversationId) {
+    console.log('检测到上次的会话信息，尝试恢复:', { lastUserId, lastConversationId });
+    
+    // 延迟一下等会话列表加载完成
+    setTimeout(async () => {
+      // 首先尝试通过会话ID查找
+      if (lastConversationId) {
+        const foundConversation = conversations.value.find(c => c.id.toString() === lastConversationId);
+        if (foundConversation) {
+          console.log('通过会话ID找到上次的会话:', foundConversation);
+          await selectConversation(foundConversation);
+          // 聚焦到输入框
+          if (messageInputRef.value) {
+            messageInputRef.value.focus();
+          }
+          // 清除localStorage中的临时数据
+          localStorage.removeItem('lastMessageUserId');
+          localStorage.removeItem('lastConversationId');
+          return;
+        }
+      }
+      
+      // 如果通过会话ID未找到，尝试通过用户ID查找
+      if (lastUserId) {
+        const foundConversation = conversations.value.find(
+          c => (c.userId === lastUserId || c.otherUserId === lastUserId)
+        );
+        
+        if (foundConversation) {
+          console.log('通过用户ID找到上次的会话:', foundConversation);
+          await selectConversation(foundConversation);
+          // 聚焦到输入框
+          if (messageInputRef.value) {
+            messageInputRef.value.focus();
+          }
+        } else {
+          // 如果找不到现有会话但有用户ID，创建新会话
+          console.log('未找到上次的会话，但有用户ID，创建新会话:', lastUserId);
+          const newConv = await createNewConversation(lastUserId);
+          if (messageInputRef.value) {
+            messageInputRef.value.focus();
+          }
+        }
+        
+        // 清除localStorage中的临时数据
+        localStorage.removeItem('lastMessageUserId');
+        localStorage.removeItem('lastConversationId');
+      }
+    }, 500);
+  }
 });
 
 // 修改加载消息的方法，支持直接通过用户ID加载消息
