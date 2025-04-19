@@ -14,6 +14,15 @@
         <!-- 在内容管理页面显示标题 -->
         <h1 v-if="isContentManagementPage" class="page-title">内容管理</h1>
         
+        <!-- 在私信页面显示标题 -->
+        <h1 v-else-if="isMessagesPage" class="page-title">私信</h1>
+        
+        <!-- 在用户个人中心页面显示标题 -->
+        <h1 v-else-if="isUserProfilePage" class="page-title">个人中心</h1>
+        
+        <!-- 在创作者中心页面显示标题 -->
+        <h1 v-else-if="isCreatorCenterPage" class="page-title">创作者中心</h1>
+        
         <!-- 在其他页面显示搜索框 -->
         <div v-else class="search-bar">
           <input type="text" v-model="searchQuery" placeholder="搜索帖子/游戏" @keyup.enter="search" />
@@ -29,9 +38,12 @@
           <div v-if="isLoggedIn" class="userinfo" @click.stop="toggleDropdown">
             <img :src="userInfo.avatar" alt="用户头像" class="avatar" />
             <span class="username">{{ userInfo.username }}</span>
-            <el-icon class="message-icon" @click.stop="goToMessagePage" title="私信">
-              <Message />
-            </el-icon>
+            <div class="message-icon-container">
+              <el-icon class="message-icon" @click.stop="goToMessagePage" title="私信">
+                <Message />
+              </el-icon>
+              <UnreadMessageBadge />
+            </div>
             <div v-if="isDropdownVisible" class="dropdown">
               <div class="dropdown-item" @click.stop="goToUserProfile">用户中心</div>
               <div class="dropdown-item" @click.stop="handleLogout">退出登录</div>
@@ -100,11 +112,12 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.js';
 import axios from 'axios'
 import { Message } from '@element-plus/icons-vue'
+import UnreadMessageBadge from '@/components/UnreadMessageBadge.vue';
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -251,11 +264,56 @@ const isContentManagementPage = computed(() => {
          document.body.classList.contains('content-management-page');
 });
 
+// 添加私信页面检测变量
+const isMessagesPage = computed(() => {
+  // 检查是否在私信页面
+  return router.currentRoute.value.path === '/messages';
+});
+
+// 添加用户个人中心页面检测变量
+const isUserProfilePage = computed(() => {
+  // 检查是否在用户个人中心页面
+  return router.currentRoute.value.path.startsWith('/user/');
+});
+
+// 添加创作者中心页面检测变量
+const isCreatorCenterPage = computed(() => {
+  // 检查是否在创作者中心页面
+  return router.currentRoute.value.path === '/creator-center';
+});
+
 // 私信页面跳转方法
 const goToMessagePage = () => {
   router.push('/messages');
 };
 
+// 获取当前页面标题
+const getPageTitle = () => {
+  if (isContentManagementPage.value) {
+    return '内容管理 - Blackbox';
+  } else if (isMessagesPage.value) {
+    return '私信 - Blackbox';
+  } else if (isUserProfilePage.value) {
+    return '个人中心 - Blackbox';
+  } else if (isCreatorCenterPage.value) {
+    return '创作者中心 - Blackbox';
+  } else {
+    return 'Blackbox社区';
+  }
+};
+
+// 监听路由变化，更新页面标题
+watch(
+  () => router.currentRoute.value.path,
+  () => {
+    document.title = getPageTitle();
+  }
+);
+
+// 初始设置页面标题
+onMounted(() => {
+  document.title = getPageTitle();
+});
 </script>
 
 <style>
@@ -561,15 +619,21 @@ body {
 }
 
 .page-title {
-  font-size: 22px;
+  font-size: 18px;
+  font-weight: 600;
   color: #333;
   margin: 0;
-  font-weight: bold;
+  padding: 0;
+  margin-bottom: 5px;
 }
 
 /* 添加私信图标样式 */
-.message-icon {
+.message-icon-container {
+  position: relative;
   margin-left: 15px;
+}
+
+.message-icon {
   font-size: 20px;
   color: #409EFF;
   cursor: pointer;

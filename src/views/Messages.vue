@@ -67,6 +67,9 @@
                   </div>
                 </div>
                 <div class="conversation-actions">
+                  <div v-if="conversation.unreadCount > 0" class="unread-badge">
+                    {{ conversation.unreadCount > 99 ? '99+' : conversation.unreadCount }}
+                  </div>
                   <button class="delete-conversation-btn" @click.stop="confirmDeleteConversation(conversation)" title="删除会话">
                     <el-icon><Delete /></el-icon>
                   </button>
@@ -1863,27 +1866,59 @@ main {
 }
 
 .conversation-item {
+  position: relative;
   display: flex;
   padding: 15px;
-  border-radius: 10px; /* 增加圆角 */
+  border-radius: 10px;
   margin-bottom: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
-  background-color: #fff; /* 白色背景 */
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); /* 微妙的阴影 */
+  background-color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   justify-content: space-between;
 }
 
 .conversation-item:hover {
-  background-color: #f0f7ff; /* 鼠标悬停时的浅蓝色 */
+  background-color: #f0f7ff;
   transform: translateY(-2px);
   box-shadow: 0 3px 8px rgba(64, 158, 255, 0.1);
 }
 
 .conversation-item.active {
   background-color: #e6f7ff;
-  border-left: 3px solid #409eff; /* 活跃项的左侧蓝色边框 */
-  padding-left: 12px; /* 补偿边框宽度 */
+  border-left: 3px solid #409eff;
+}
+
+/* 移除悬停检测，直接基于.unread-badge类进行样式应用 */
+.conversation-item .unread-badge {
+  background-color: #f56c6c;
+  color: white;
+  border-radius: 50%;
+  min-width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(245, 108, 108, 0.3);
+  padding: 0 5px;
+}
+
+/* 有未读消息的对话项特殊样式 */
+.conversation-item:has(.unread-badge) {
+  background-color: #f0f7ff;
+  border-left: 3px solid #409eff;
+}
+
+.conversation-item:has(.unread-badge) .username {
+  font-weight: 600;
+  color: #303133;
+}
+
+.conversation-item:has(.unread-badge) .last-message {
+  font-weight: 500;
+  color: #303133;
 }
 
 .avatar {
@@ -1913,11 +1948,7 @@ main {
   text-overflow: ellipsis;
 }
 
-.time {
-  font-size: 12px;
-  color: #999;
-  white-space: nowrap;
-}
+
 
 .last-message {
   font-size: 13px;
@@ -2623,15 +2654,73 @@ main {
   align-items: center;
 }
 
+.conversation-info {
+  flex: 1;
+  min-width: 0;
+  position: relative; /* 添加相对定位 */
+}
+
+.conversation-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px; /* 增加与最后消息的间距 */
+}
+
+.username {
+  font-weight: 500;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70%; /* 限制宽度，为时间留出空间 */
+}
+
+.time {
+  font-size: 12px;
+  color: #999;
+  white-space: nowrap;
+  position: absolute; /* 使用绝对定位 */
+  bottom: -10px;
+  right: -20px;
+
+}
+
+.last-message {
+  font-size: 13px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 60px; /* 为时间预留空间 */
+  margin-bottom: 15px; /* 为时间显示预留空间 */
+}
+
 .conversation-actions {
   display: flex;
   align-items: center;
-  opacity: 0;  /* 默认隐藏 */
-  transition: opacity 0.2s ease;
+  position: relative;
+  opacity: 1 !important; /* 强制始终显示 */
 }
 
-.conversation-item:hover .conversation-actions {
-  opacity: 1;  /* 鼠标悬停时显示 */
+/* 删除这个规则，它会影响未读徽章的显示 */
+/* .conversation-item:hover .conversation-actions {
+  opacity: 1;
+} */
+
+/* 添加额外的样式确保有未读消息的会话项有明显不同 */
+.conversation-item:has(.unread-badge) {
+  background-color: #f0f7ff;
+  border-left: 3px solid #409eff;
+}
+
+.conversation-item:has(.unread-badge) .username {
+  font-weight: 600;
+  color: #303133;
+}
+
+.conversation-item:has(.unread-badge) .last-message {
+  font-weight: 500;
+  color: #303133;
 }
 
 .delete-conversation-btn {
@@ -2710,5 +2799,42 @@ main {
   text-align: left !important;
   padding-left: 8px;
   clear: both;
+}
+
+/* 未读消息红点样式 */
+.unread-badge {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  right: 32px; /* 调整右侧位置 */
+  background-color: #f56c6c;
+  color: white;
+  border-radius: 10px;
+  min-width: 20px;
+  height: 20px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  box-shadow: 0 2px 4px rgba(245, 108, 108, 0.3);
+  z-index: 5;
+  opacity: 1 !important; /* 强制始终显示 */
+}
+
+.conversation-actions {
+  display: flex;
+  align-items: center;
+  opacity: 1 !important; /* 强制始终显示 */
+}
+
+/* 只让删除按钮在悬停时显示 */
+.delete-conversation-btn {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.conversation-item:hover .delete-conversation-btn {
+  opacity: 1;
 }
 </style> 
