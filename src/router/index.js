@@ -41,6 +41,12 @@ const routes = [
                 component: () => import('../views/UserProfile.vue')
             },
             {
+                path: '/messages',
+                name: 'Messages',
+                component: () => import('../views/Messages.vue'),
+                meta: { requiresAuth: true } // 需要登录
+            },
+            {
                 path: '/temp-redirect',
                 name: 'TempRedirect',
                 component: {

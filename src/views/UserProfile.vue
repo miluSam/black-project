@@ -130,23 +130,6 @@
 
     <router-view></router-view>
     
-    <!-- 私信弹窗 -->
-    <div v-if="showMessageDialog" class="message-dialog-overlay">
-      <div class="message-dialog">
-        <div class="message-dialog-header">
-          <h3>发送私信给 {{ userProfile.username }}</h3>
-          <button class="close-btn" @click="showMessageDialog = false">×</button>
-        </div>
-        <div class="message-dialog-body">
-          <textarea v-model="messageContent" placeholder="请输入私信内容..."></textarea>
-        </div>
-        <div class="message-dialog-footer">
-          <button class="cancel-btn" @click="showMessageDialog = false">取消</button>
-          <button class="send-btn" @click="submitMessage" :disabled="!messageContent.trim()">发送</button>
-        </div>
-      </div>
-    </div>
-
     <!-- 添加编辑个人资料弹窗 -->
     <div v-if="showEditProfileDialog" class="message-dialog-overlay">
       <div class="profile-edit-dialog">
@@ -284,8 +267,6 @@ export default defineComponent({
     const hasMorePosts = ref(true);
     const isLoading = ref(false);
     const isFollowing = ref(false);
-    const showMessageDialog = ref(false);
-    const messageContent = ref('');
     const showLoginPopup = ref(false);
     const profileError = ref('');
     const postsError = ref('');
@@ -473,35 +454,11 @@ export default defineComponent({
         return;
       }
       
-      showMessageDialog.value = true;
-    };
-    
-    // 提交私信
-    const submitMessage = async () => {
-      if (!messageContent.value.trim()) return;
-      
-      try {
-        const jwtToken = sessionStorage.getItem('jwtToken');
-        const config = {
-          headers: {
-            'Authorization': `Bearer ${jwtToken}`
-          }
-        };
-        
-        await axios.post('http://localhost:7070/api/messages/send', {
-          recipientId: userId.value,
-          content: messageContent.value
-        }, config);
-        
-        messageContent.value = '';
-        showMessageDialog.value = false;
-        alert('私信发送成功!');
-      } catch (error) {
-        console.error('发送私信失败:', error);
-        alert('私信发送成功!'); // 如果API未实现，也显示成功
-        messageContent.value = '';
-        showMessageDialog.value = false;
-      }
+      // 直接跳转到消息页面，并传递用户ID作为参数
+      router.push({
+        path: '/messages',
+        query: { userId: userId.value }
+      });
     };
 
     // 跳转到帖子详情
@@ -962,8 +919,6 @@ export default defineComponent({
       isFollowing,
       isLoading,
       hasMorePosts,
-      showMessageDialog,
-      messageContent,
       profileError,
       postsError,
       canScrollLeft,
@@ -973,7 +928,6 @@ export default defineComponent({
       loadMorePosts,
       toggleFollow,
       sendMessage,
-      submitMessage,
       formatDate,
       handleGlobalScroll,
       showEditProfileDialog,
@@ -1435,96 +1389,7 @@ main {
   font-style: italic;
 }
 
-/* 私信弹窗样式 */
-.message-dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 2000;
-}
-
-.message-dialog {
-  width: 400px;
-  background-color: white;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.message-dialog-header {
-  padding: 15px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #eee;
-}
-
-.message-dialog-header h3 {
-  margin: 0;
-  font-size: 16px;
-  color: #333;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 20px;
-  color: #999;
-  cursor: pointer;
-}
-
-.message-dialog-body {
-  padding: 20px;
-}
-
-.message-dialog-body textarea {
-  width: 100%;
-  height: 120px;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  resize: none;
-  font-size: 14px;
-}
-
-.message-dialog-footer {
-  padding: 15px 20px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  border-top: 1px solid #eee;
-}
-
-.message-dialog-footer button {
-  padding: 8px 15px;
-  border-radius: 4px;
-  font-size: 14px;
-  cursor: pointer;
-  border: none;
-}
-
-.cancel-btn {
-  background-color: #f5f5f5;
-  color: #333;
-}
-
-.send-btn {
-  background-color: #409EFF;
-  color: white;
-}
-
-.send-btn:disabled {
-  background-color: #a0cfff;
-  cursor: not-allowed;
-}
-
-/* 编辑个人资料弹窗样式 */
+/* 添加编辑个人资料弹窗样式 */
 .profile-edit-dialog {
   width: 500px;
   background-color: white;

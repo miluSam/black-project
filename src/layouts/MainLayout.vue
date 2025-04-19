@@ -26,9 +26,12 @@
         <div class="login">
           <!-- 根据登录状态显示登录按钮或用户头像和用户名 -->
           <button v-if="!isLoggedIn" @click="showLoginPopup = true">登录</button>
-          <div v-if="isLoggedIn" class="userinfo" @click="toggleDropdown">
+          <div v-if="isLoggedIn" class="userinfo" @click.stop="toggleDropdown">
             <img :src="userInfo.avatar" alt="用户头像" class="avatar" />
             <span class="username">{{ userInfo.username }}</span>
+            <el-icon class="message-icon" @click.stop="goToMessagePage" title="私信">
+              <Message />
+            </el-icon>
             <div v-if="isDropdownVisible" class="dropdown">
               <div class="dropdown-item" @click.stop="goToUserProfile">用户中心</div>
               <div class="dropdown-item" @click.stop="handleLogout">退出登录</div>
@@ -101,6 +104,8 @@ import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.js';
 import axios from 'axios'
+import { Message } from '@element-plus/icons-vue'
+
 const router = useRouter()
 const authStore = useAuthStore()
 
@@ -245,6 +250,11 @@ const isContentManagementPage = computed(() => {
   return router.currentRoute.value.path === '/content-management' ||
          document.body.classList.contains('content-management-page');
 });
+
+// 私信页面跳转方法
+const goToMessagePage = () => {
+  router.push('/messages');
+};
 
 </script>
 
@@ -555,5 +565,18 @@ body {
   color: #333;
   margin: 0;
   font-weight: bold;
+}
+
+/* 添加私信图标样式 */
+.message-icon {
+  margin-left: 15px;
+  font-size: 20px;
+  color: #409EFF;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.message-icon:hover {
+  color: #66b1ff;
 }
 </style>    

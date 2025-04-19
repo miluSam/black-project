@@ -929,7 +929,7 @@ export default defineComponent({
         weights.fanScore * fanScore
       );
       
-      return {
+    return {
         score: totalScore,
         details: {
           viewScore,
