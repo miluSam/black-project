@@ -115,17 +115,16 @@
                 v-for="(message, index) in messages" 
                 :key="index"
                 class="message-item"
-                :class="{ 
-                  'sent': message.senderId === currentUserId,
-                  'received': message.senderId !== currentUserId && !message.isSystem,
-                  'system': message.isSystem,
-                  'send-failed': message.sendFailed
-                }"
+                :class="[
+                  message.isSystem ? 'system' : 
+                  (authStore.userInfo?.username === message.senderName) ? 'sent' : 'received',
+                  {'send-failed': message.sendFailed}
+                ]"
               >
                 <!-- 对系统消息使用特殊样式 -->
                 <div v-if="message.isSystem" class="system-message">
                   {{ message.content }}
-                  <div class="message-time">{{ formatTime(message.timestamp) }}</div>
+                  <div class="message-time">{{ formatTime(message.timestamp || message.sendTime) }}</div>
                 </div>
                 <template v-else>
                   <div :class="['message-bubble', message.sendFailed ? 'failed' : '']">
@@ -150,7 +149,7 @@
                       <el-icon><RefreshRight /></el-icon> 重试
                     </button>
                   </div>
-                  <div class="message-time">{{ formatTime(message.timestamp) }}</div>
+                  <div class="message-time">{{ formatTime(message.timestamp || message.sendTime) }}</div>
                 </template>
               </div>
             </div>
@@ -869,9 +868,14 @@ const sendMessage = async () => {
     id: tempId,
     conversationId: selectedConversation.value.id,
     senderId: currentUserId.value,
+    senderName: authStore.userInfo?.username,
+    senderAvatar: authStore.userInfo?.avatar,
     receiverId: selectedConversation.value.userId || selectedConversation.value.otherUserId,
+    receiverName: selectedConversation.value.username,
+    receiverAvatar: selectedConversation.value.avatar,
     content: newMessage.value.trim(),
     timestamp: new Date().toISOString(),
+    isSentByCurrentUser: true,
     read: false
   };
   
@@ -894,8 +898,11 @@ const sendMessage = async () => {
   }
   
   // 先将消息添加到列表中（乐观UI更新）
-  messages.value = [...(Array.isArray(messages.value) ? messages.value : []), newMessageData];
-  console.log('消息已添加到列表中，当前消息数量:', messages.value.length);
+  if (!Array.isArray(messages.value)) {
+    messages.value = [];
+  }
+  messages.value = [...messages.value, newMessageData];
+  console.log('消息已添加到列表中，当前消息姓名:', newMessageData.senderName, '当前用户姓名:', authStore.userInfo?.username);
   
   // 清空输入和附件选择
   const messageContent = newMessage.value.trim(); // 保存内容用于日志
@@ -1067,6 +1074,43 @@ const sendMessage = async () => {
       }
       
       console.log('消息发送完成，更新了UI');
+      
+      // 消息发送成功后，立即重新获取最新的消息列表
+      try {
+        const targetUserId = selectedConversation.value.userId || selectedConversation.value.otherUserId;
+        console.log('正在重新获取最新消息列表，用户ID:', targetUserId);
+        
+        const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+        const refreshResponse = await axios.get(`http://localhost:7070/api/messages/${targetUserId}`, {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`
+          }
+        });
+        
+        if (refreshResponse.status === 200) {
+          console.log('重新获取消息成功:', refreshResponse.data);
+          
+          // 提取消息数组，正确处理API返回的数据结构
+          let messagesData = [];
+          if (refreshResponse.data && Array.isArray(refreshResponse.data)) {
+            messagesData = refreshResponse.data;
+          } else if (refreshResponse.data && refreshResponse.data.data && Array.isArray(refreshResponse.data.data)) {
+            messagesData = refreshResponse.data.data;
+          } else {
+            console.warn('消息刷新API响应格式不符合预期');
+            return; // 不更新消息列表
+          }
+          
+          // 更新消息列表并滚动到底部
+          messages.value = messagesData;
+          nextTick(() => {
+            scrollToBottom();
+          });
+        }
+      } catch (refreshError) {
+        console.error('重新获取消息失败:', refreshError);
+        // 这个错误不会影响用户体验，所以不显示错误提示
+      }
     }
   } catch (error) {
     console.error('发送消息失败:', error);
@@ -1639,6 +1683,36 @@ const loadMessagesByUserId = async (userId) => {
 };
 
 const messageInputRef = ref(null);
+
+// 增加新的辅助函数，判断消息是否由当前用户发送
+const determineIfSent = (message) => {
+  // 添加调试日志，帮助分析每个消息的状态
+  console.log(`消息ID:${message.id}, isSentByCurrentUser:${message.isSentByCurrentUser}, 
+    senderId:${message.senderId}, currentUserId:${currentUserId.value}, 
+    senderName:${message.senderName}`);
+
+  if (message.isSentByCurrentUser === true) {
+    return true;
+  }
+  
+  // 检查当前用户名是否与发送者名称匹配
+  if (message.senderName === authStore.userInfo?.username) {
+    return true;
+  }
+
+  // 检查senderId是否与当前用户ID匹配
+  if (message.senderId && currentUserId.value && 
+      message.senderId.toString() === currentUserId.value.toString()) {
+    return true;
+  }
+  
+  // 补充：检查消息的创建方式（本地创建的临时消息显示在右侧）
+  if (message.id && typeof message.id === 'string' && message.id.startsWith('temp_')) {
+    return true;
+  }
+  
+  return false;
+};
 </script>
 
 <style scoped>
@@ -1932,11 +2006,13 @@ main {
 }
 
 .sent {
-  align-self: flex-end;
+  align-self: flex-end !important;
+  margin-right: 10px !important;
 }
 
 .received {
-  align-self: flex-start;
+  align-self: flex-start !important;
+  margin-left: 10px !important;
 }
 
 .message-bubble {
@@ -1948,17 +2024,17 @@ main {
 }
 
 .sent .message-bubble {
-  background-color: white;
-  color: #333;
+  background-color: #409eff !important;
+  color: white !important;
   border-bottom-right-radius: 4px;
-  border: 1px solid #eaedf3; /* Add border */
+  background-image: linear-gradient(135deg, #409eff 0%, #50b7ff 100%) !important;
 }
 
 .received .message-bubble {
-  background-color: #409eff;
-  color: white;
+  background-color: white !important;
+  color: #333 !important;
   border-bottom-left-radius: 4px;
-  background-image: linear-gradient(135deg, #409eff 0%, #50b7ff 100%); /* Gradient background */
+  border: 1px solid #eaedf3 !important;
 }
 
 .message-time {
