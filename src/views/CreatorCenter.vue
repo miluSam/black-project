@@ -341,12 +341,9 @@ main {
 .center-content-wrapper {
   width: 610px; /* 与 form-wrapper 宽度一致 */
   margin: 0 20px; /* 保持左右间距 */
-  /* 设置最大高度并允许滚动 */
-  max-height: calc(100vh - 115px); /* 100vh - 导航栏高度 - main的padding-top */
-  overflow-y: auto;
-  /* 隐藏滚动条样式 (可选，根据 Index.vue) */
-  /* scrollbar-width: none;  /* Firefox */
-  /* &::-webkit-scrollbar { display: none; } /* Chrome, Safari, Opera */
+  /* 移除高度限制和滚动条 */
+  /* max-height: calc(100vh - 115px); */
+  /* overflow-y: auto; */
 }
 
 .form-wrapper {
@@ -355,8 +352,8 @@ main {
   padding: 30px;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  margin-top: 10px;
-  /* 移除 margin-bottom */
+  margin-top: 15px;
+  margin-bottom: 20px; /* 恢复底部外边距 */
 }
 
 .form-wrapper h2 {
@@ -412,8 +409,10 @@ main {
 
 .form-group textarea {
   min-height: 200px; /* 增加文本域最小高度 */
-  resize: vertical;
+  resize: vertical; /* 可以保留或移除，看是否需要手动调整 */
   line-height: 1.6;
+  height: auto; /* 明确设置高度为自动 */
+  overflow: hidden; /* 隐藏内部滚动条，配合 height: auto */
 }
 
 /* --- 图片上传区域样式 --- */
