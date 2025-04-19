@@ -80,8 +80,8 @@
               <img @click.stop="goToUserProfile(post.user ? post.user.id : userId)" :src="post.user ? post.user.imageUrl : userProfile.imageUrl" alt="用户头像" class="avatar" style="cursor: pointer">
               <span @click.stop="goToUserProfile(post.user ? post.user.id : userId)" class="username" style="cursor: pointer">{{ post.user ? post.user.username : userProfile.username }}</span>
             </div>
-            <h2>{{ post.title }}</h2>
-            <p>{{ post.content }}</p>
+            <h2 class="post-title">{{ truncateTitle(post.title) }}</h2>
+            <p class="post-content">{{ truncateContent(post.content) }}</p>
             <div v-if="post.imageUrl" class="post-image" :class="{ 'multiple-images': post.imageUrl.length > 1 }">
               <template v-if="post.imageUrl.length === 1">
                 <img :src="post.imageUrl[0]" alt="帖子图片" class="single-image">
@@ -299,6 +299,18 @@ export default defineComponent({
     const originalFile = ref(null);
     const isDragging = ref(false);
     const startPosition = ref({ x: 0, y: 0 });
+
+    // 截断标题，限制为20个字
+    const truncateTitle = (title) => {
+      if (!title) return '';
+      return title.length > 20 ? title.substring(0, 20) + '...' : title;
+    };
+
+    // 截断内容，限制为50个字
+    const truncateContent = (content) => {
+      if (!content) return '';
+      return content.length > 50 ? content.substring(0, 50) + '...' : content;
+    };
 
     // 检查JWT令牌是否过期
     const checkJwtExpiration = () => {
@@ -949,7 +961,9 @@ export default defineComponent({
       startDrag,
       cancelCrop,
       confirmCrop,
-      handleWheel
+      handleWheel,
+      truncateTitle,
+      truncateContent
     };
   }
 });
@@ -1621,5 +1635,44 @@ main {
 .confirm-btn {
   background-color: #409EFF;
   color: white;
+}
+
+/* 添加帖子标题和内容的截断样式 (与 Index.vue 一致) */
+.post-title {
+  margin: 0 0 10px 0;
+  font-size: 18px; /* 或保持个人中心原有的标题大小 */
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: bold;
+}
+
+.post-content {
+  font-size: 14px;
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* 限制最多显示2行 */
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+/* 确保个人中心 .post-item 样式与截断兼容 */
+.post-item:not(:first-child) {
+  /* 可能需要调整 height 或移除固定 height */
+  /* height: auto; */ 
+  position: relative;
+  padding-top: 50px; /* 保持原有内边距 */
+  padding-bottom: 50px; /* 增加底部内边距以容纳元数据 */
+}
+
+/* 调整内容 P 标签的样式，避免与截断冲突 */
+.post-item:not(:first-child) p.post-content {
+  /* 移除或调整可能存在的固定 margin-bottom */
+  /* margin-bottom: 10px; */ 
 }
 </style>    

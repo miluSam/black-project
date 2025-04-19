@@ -600,26 +600,34 @@ export default defineComponent({
 
     // 执行删除评论的操作
     const deleteComment = async (commentId) => {
+      closeContextMenu(); // 先关闭菜单
+      if (!commentId) {
+        ElMessage.error('无法删除评论，评论ID无效');
+        return;
+      }
       try {
+        const jwtToken = authStore.userInfo?.token || localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+        if (!jwtToken) {
+          ElMessage.error('请先登录');
+          return;
+        }
+        
+        // 使用正确的 API 接口路径
         const response = await axios.delete(`/api/comments/delete/${commentId}`, {
           headers: {
-            Authorization: `Bearer ${authStore.userInfo?.token || localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken')}`
+            Authorization: `Bearer ${jwtToken}`
           }
         });
         
-        if (response.status === 200) {
-          // 显示成功消息
+        if (response.data.code === 200 || response.status === 200) { // 检查多种成功状态
           ElMessage.success('评论已成功删除');
-          // 刷新帖子详情以更新评论列表
-          await fetchPostDetail();
-          // 关闭上下文菜单
-          closeContextMenu();
+          await fetchPostDetail(); // 刷新帖子详情以更新评论列表
+        } else {
+          ElMessage.error(response.data?.message || '删除评论失败');
         }
       } catch (error) {
         console.error('删除评论失败:', error);
-        ElMessage.error(error.response?.data?.message || '删除评论失败');
-        // 关闭上下文菜单
-        closeContextMenu();
+        ElMessage.error(error.response?.data?.message || '删除评论时发生错误');
       }
     };
 
