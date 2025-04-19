@@ -173,7 +173,7 @@
 </template>
 
 <script>
-import { defineComponent, ref, onMounted, computed, onBeforeUnmount } from 'vue';
+import { defineComponent, ref, onMounted, computed, onBeforeUnmount, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { useAuthStore } from '../stores/auth.js';
@@ -338,45 +338,45 @@ export default defineComponent({
       return true;
     };
     const fetchPostDetail = async () => {
-      if (!(await checkAndRefreshToken())) return;
+      isLoading.value = true; // 开始加载
+      error.value = null;    // 清除旧错误
+      
+      // 不需要再检查 token，checkAndRefreshToken 会处理
+      // if (!(await checkAndRefreshToken())) return;
+      
       try {
         const postId = route.query.postId;
         if (!postId) throw new Error('缺少帖子ID');
         
-        const authStore = useAuthStore();
-        if (!authStore.isLoggedIn) {
-          throw new Error('未登录或登录已过期');
-        }
-
+        // 获取最新的 token
         const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-
-        if (!jwtToken) {
-          console.error('未找到认证令牌');
-          return;
-        }
+        const config = jwtToken ? { headers: { 'Authorization': `Bearer ${jwtToken}` } } : {};
 
         const response = await axios.get('/api/post-detail', {
           params: { postId },
-          headers: {
-            'Authorization': `Bearer ${jwtToken}`
-          }
+          ...config // 如果有 token 则添加 headers
         });
 
         if (!response.data) throw new Error('无效的响应数据');
         post.value = response.data;
         
-        // 获取帖子详情后检查当前用户是否已点赞
-        await checkLikeStatus();
+        // 如果用户已登录，获取帖子详情后检查当前用户是否已点赞
+        if (authStore.isLoggedIn) {
+          await checkLikeStatus();
+        }
         
-        // 获取帖子详情后记录浏览
+        // 获取帖子详情后记录浏览 (仅当帖子成功加载)
         recordPostView();
       } catch (err) {
         error.value = err.response?.data?.message || err.message || '获取帖子详情失败';
         console.error('Error details:', err);
         
-        if (err.response?.status === 401) {
-          const authStore = useAuthStore();
+        // 如果是认证错误，但用户状态仍是登录，则登出
+        if (err.response?.status === 401 && authStore.isLoggedIn) {
           authStore.logout();
+          ElMessage.error('登录验证失败，请重新登录');
+        } else if (err.response?.status !== 401) { // 非认证错误才提示
+          ElMessage.error(error.value);
         }
       } finally {
         isLoading.value = false;
@@ -719,6 +719,21 @@ export default defineComponent({
       // 如果没有段落（可能只有一行文本没有换行符），就将整个内容作为一个段落返回
       return paragraphs.length > 0 ? paragraphs : [content];
     };
+
+    // 监听登录状态变化
+    watch(() => authStore.isLoggedIn, (newIsLoggedIn, oldIsLoggedIn) => {
+      // 只有在从未登录变为登录时才重新加载
+      // 并且只在之前帖子加载失败或未加载时重新获取，避免重复加载
+      if (newIsLoggedIn && !oldIsLoggedIn && (!post.value || error.value)) {
+        console.log('用户已登录，重新获取帖子详情...');
+        fetchPostDetail();
+      }
+      // 如果刚登录，并且帖子已存在，可能需要刷新点赞状态
+      else if (newIsLoggedIn && !oldIsLoggedIn && post.value) {
+        console.log('用户已登录，刷新点赞状态...');
+        checkLikeStatus(); 
+      }
+    });
 
     return { 
       post, 
