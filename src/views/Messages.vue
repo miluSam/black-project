@@ -940,7 +940,9 @@ const sendMessage = async () => {
     selectedConversation.value.lastMessageTime = new Date().toISOString();
     
     // 如果是临时会话，确保其位于列表顶部
-    if (selectedConversation.value.id.startsWith('new_') || selectedConversation.value.id.startsWith('temp_')) {
+    // 添加类型检查，确保 id 是字符串并且只有字符串才调用 startsWith
+    const convId = selectedConversation.value.id;
+    if (typeof convId === 'string' && (convId.startsWith('new_') || convId.startsWith('temp_'))) {
       const index = conversations.value.findIndex(c => c.id === selectedConversation.value.id);
       if (index > 0) {
         // 移到列表顶部
@@ -998,7 +1000,9 @@ const sendMessage = async () => {
       }
       
       // 如果这是一个新会话，尝试从响应中获取真实的会话ID
-      if (selectedConversation.value.id.startsWith('new_') || selectedConversation.value.id.startsWith('temp_')) {
+      // 再次添加类型检查，确保 id 是字符串
+      const currentConvId = selectedConversation.value.id;
+      if (typeof currentConvId === 'string' && (currentConvId.startsWith('new_') || currentConvId.startsWith('temp_'))) {
         const conversationId = response.data.conversationId || 
                              response.data.data?.conversationId || 
                              null;
@@ -1278,16 +1282,27 @@ const deleteConversation = async (conversation) => {
     }
     
     // 如果是API创建的正式会话，向服务器发送删除请求
-    if (conversation.id && !conversation.id.toString().startsWith('new_')) {
+    // 优先使用 otherUserId，如果不存在则回退到 userId (假设 userId 在此场景下代表对方用户ID)
+    const targetId = conversation.userId;
+    
+    // 检查 targetId 是否有效，以及会话是否为临时会话
+    if (targetId && !(conversation.id && conversation.id.toString().startsWith('new_'))) { 
+      console.log(`准备删除会话，使用的目标用户ID: ${targetId} (来自 otherUserId 或 userId)`);
       const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-      await axios.delete(`http://localhost:7070/api/messages/conversations/${conversation.id}`, {
+      // 确认 API 端点使用推断出的对方用户 ID
+      await axios.delete(`http://localhost:7070/api/messages/conversations/${targetId}`, {
         headers: {
           'Authorization': `Bearer ${jwtToken}`
         }
       });
       ElMessage.success('会话已删除');
-    } else {
+    } else if (conversation.id && conversation.id.toString().startsWith('new_')) {
+      // 如果是临时会话，只提示本地移除
       ElMessage.success('临时会话已移除');
+    } else {
+      // 处理无法获取有效 targetId 的情况
+      console.warn('无法删除会话：未能确定有效的对方用户ID', conversation);
+      ElMessage.warning('无法删除此会话');
     }
   } catch (error) {
     console.error('删除会话失败:', error);
