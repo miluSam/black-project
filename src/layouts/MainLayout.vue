@@ -11,8 +11,8 @@
 
       <!-- Center Section (Search Bar or Page Title) -->
       <div class="center-section">
-        <!-- 在内容管理页面显示标题 -->
-        <h1 v-if="isContentManagementPage" class="page-title">内容管理</h1>
+        <!-- 动态页面标题 -->
+        <h1 v-if="currentPageType !== 'default'" class="page-title">{{ currentPageTitle }}</h1>
         
         <!-- 在私信页面显示标题 -->
         <h1 v-else-if="isMessagesPage" class="page-title">私信</h1>
@@ -112,7 +112,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.js';
 import axios from 'axios'
@@ -260,8 +260,7 @@ const goToUserProfile = () => {
 // 添加页面类型检测变量
 const isContentManagementPage = computed(() => {
   // 检查是否在内容管理页面
-  return router.currentRoute.value.path === '/content-management' ||
-         document.body.classList.contains('content-management-page');
+  return router.currentRoute.value.path === '/content-management';
 });
 
 // 添加私信页面检测变量
@@ -302,17 +301,44 @@ const getPageTitle = () => {
   }
 };
 
-// 监听路由变化，更新页面标题
+// 监听路由变化，更新页面标题和强制更新计算属性
 watch(
   () => router.currentRoute.value.path,
-  () => {
-    document.title = getPageTitle();
-  }
+  (newPath, oldPath) => {
+    console.log(`路由变化: ${oldPath} -> ${newPath}`);
+    // 强制刷新DOM以确保计算属性重新计算
+    nextTick(() => {
+      document.title = getPageTitle();
+    });
+  },
+  { immediate: true } // 立即执行一次
 );
 
 // 初始设置页面标题
 onMounted(() => {
   document.title = getPageTitle();
+});
+
+// 添加统一的页面类型和标题计算属性
+const currentPageType = computed(() => {
+  const path = router.currentRoute.value.path;
+  
+  if (path === '/content-management') return 'content';
+  if (path === '/messages') return 'messages';
+  if (path.startsWith('/user/')) return 'profile';
+  if (path === '/creator-center') return 'creator';
+  
+  return 'default';
+});
+
+const currentPageTitle = computed(() => {
+  switch (currentPageType.value) {
+    case 'content': return '内容管理';
+    case 'messages': return '私信';
+    case 'profile': return '个人中心';
+    case 'creator': return '创作者中心';
+    default: return '';
+  }
 });
 </script>
 

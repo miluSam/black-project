@@ -1,98 +1,74 @@
 <template>
   <div id="create-post">
-    <!-- 头部 -->
-    <header class="header">
-      <div class="logo">
-        <img src="https://blackbox-web.oss-cn-wuhan-lr.aliyuncs.com/blackbox.png" alt="Logo" />
-      </div>
-      <div class="page-title">
-        创作者中心
-      </div>
-      <div class="user-section">
-        <div v-if="authStore.isLoggedIn" class="userinfo" @click="toggleDropdown">
-          <img :src="authStore.userInfo.avatar" alt="用户头像" class="avatar" />
-          <span class="username">{{ authStore.userInfo.username }}</span>
-          <div v-if="isDropdownVisible" class="dropdown">
-            <div class="dropdown-item" @click="goToUserProfile">用户中心</div>
-            <div class="dropdown-item" @click="handleLogout">退出登录</div>
-          </div>
-        </div>
-        <button v-else @click="showLoginPopup = true">登录</button>
-      </div>
-    </header>
-
     <!-- 内容区域 -->
     <main>
       <LeftBlock />
-
-      <!-- 修改为简单的表单结构 -->
-      <div class="form-wrapper">
-        <h2>创建新帖子</h2>
-        <form @submit.prevent="submitPost">
-          <div class="form-group">
-            <label for="title">标题:</label>
-            <input type="text" id="title" v-model="post.title" required />
-          </div>
-          <div class="form-group">
-            <label for="content">内容:</label>
-            <textarea id="content" v-model="post.content" required></textarea>
-          </div>
-
-          <!-- 新的图片上传区域 -->
-          <div class="form-group">
-            <label>图片 (最多 {{ maxFiles }} 张):</label>
-            <div class="image-upload-area">
-              <!-- 图片预览列表 -->
-              <div v-for="(preview, index) in imagePreviews" :key="index" class="image-preview-item">
-                <img :src="preview" alt="图片预览" />
-                <button type="button" class="remove-image-btn" @click="removeImage(index)">&times;</button>
-              </div>
-              <!-- 上传触发块 -->
-              <div class="upload-block" @click="triggerFileInput" v-if="imagePreviews.length < maxFiles">
-                <span class="plus-sign">+</span>
-              </div>
+      <div class="center-content-wrapper">  <!-- 新增包裹层 -->
+        <div class="form-wrapper">
+          <h2>创建新帖子</h2>
+          <form @submit.prevent="submitPost">
+            <div class="form-group">
+              <label for="title">标题:</label>
+              <input type="text" id="title" v-model="post.title" required />
             </div>
-            <!-- 隐藏的文件输入框 -->
-            <input
-              type="file"
-              ref="fileInput"
-              @change="handleImageUpload"
-              style="display: none"
-              accept="image/*"
-              multiple
-            />
-          </div>
-           <!-- 分区选择 -->
-           <div class="form-group">
-             <label for="section">选择分区:</label>
-             <select id="section" v-model="post.sectionId" required>
-               <option disabled value="">请选择一个分区</option>
-               <option v-for="section in sections" :key="section.id" :value="section.id">
-                 {{ section.sectionName }}
-               </option>
-             </select>
-           </div>
+            <div class="form-group">
+              <label for="content">内容:</label>
+              <textarea id="content" v-model="post.content" required></textarea>
+            </div>
 
-          <button type="submit" :disabled="isSubmitting" class="submit-button">
-            {{ isSubmitting ? '发布中...' : '发布帖子' }}
-          </button>
-          <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
-          <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
-        </form>
+            <!-- 新的图片上传区域 -->
+            <div class="form-group">
+              <label>图片 (最多 {{ maxFiles }} 张):</label>
+              <div class="image-upload-area">
+                <!-- 图片预览列表 -->
+                <div v-for="(preview, index) in imagePreviews" :key="index" class="image-preview-item">
+                  <img :src="preview" alt="图片预览" />
+                  <button type="button" class="remove-image-btn" @click="removeImage(index)">&times;</button>
+                </div>
+                <!-- 上传触发块 -->
+                <div class="upload-block" @click="triggerFileInput" v-if="imagePreviews.length < maxFiles">
+                  <span class="plus-sign">+</span>
+                </div>
+              </div>
+              <!-- 隐藏的文件输入框 -->
+              <input
+                type="file"
+                ref="fileInput"
+                @change="handleImageUpload"
+                style="display: none"
+                accept="image/*"
+                multiple
+              />
+            </div>
+            <!-- 分区选择 -->
+            <div class="form-group">
+              <label for="section">选择分区:</label>
+              <select id="section" v-model="post.sectionId" required>
+                <option disabled value="">请选择一个分区</option>
+                <option v-for="section in sections" :key="section.id" :value="section.id">
+                  {{ section.sectionName }}
+                </option>
+              </select>
+            </div>
+
+            <button type="submit" :disabled="isSubmitting" class="submit-button">
+              {{ isSubmitting ? '发布中...' : '发布帖子' }}
+            </button>
+            <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
+            <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
+          </form>
+        </div>
       </div>
-
-
       <RightBlock />
     </main>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, reactive } from 'vue'; // Add computed
+import { ref, onMounted, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import axios from 'axios';
-// import { ElMessage } from 'element-plus'; // 保持注释掉
 import LeftBlock from '@/components/LeftBlock.vue';
 import RightBlock from '@/components/RightBlock.vue';
 
@@ -105,6 +81,7 @@ export default {
   setup() {
     const router = useRouter();
     const authStore = useAuthStore();
+    const hotPosts = ref([]);
 
     const post = reactive({
       title: '',
@@ -116,9 +93,6 @@ export default {
     const fileInput = ref(null); // Ref for the hidden file input
     const imagePreviews = ref([]); // 存储预览用的 data URL
     const sections = ref([]);
-    const isDropdownVisible = ref(false);
-    const showLoginPopup = ref(false); // 假设用于登录弹窗
-    const hotPosts = ref([]); // 假设右侧块需要
     const isSubmitting = ref(false);
     const errorMessage = ref('');
     const successMessage = ref('');
@@ -126,7 +100,6 @@ export default {
 
     // 获取热门帖子 (假设 RightBlock 可能需要)
     const fetchHotPosts = async () => {
-      // ... (fetchHotPosts logic remains the same) ...
        try {
          const response = await axios.get('/api/posts'); // 使用相对路径或完整 API 地址
          hotPosts.value = response.data?.data || response.data || []; // 适应不同响应结构
@@ -309,27 +282,6 @@ export default {
       }
     };
 
-    // --- 用户操作 (顶部导航栏) ---
-    const toggleDropdown = () => {
-      isDropdownVisible.value = !isDropdownVisible.value;
-    };
-
-    const goToPage = (path) => {
-      router.push({ path: `/${path}` });
-    };
-
-    const goToUserProfile = () => {
-      if (authStore.isLoggedIn && authStore.userInfo.id) {
-        router.push(`/user/${authStore.userInfo.id}`);
-      }
-    };
-
-    const handleLogout = () => {
-      authStore.logout();
-      router.push({ name: 'Index' }); // 或登录页
-      isDropdownVisible.value = false; // 关闭下拉菜单
-    };
-
     // --- 生命周期钩子 ---
     onMounted(() => {
       // 页面加载时获取分区列表和热门帖子
@@ -343,9 +295,6 @@ export default {
       fileInput, // 需要暴露给模板
       imagePreviews,
       sections,
-      isDropdownVisible,
-      showLoginPopup,
-      hotPosts,
       isSubmitting,
       errorMessage,
       successMessage,
@@ -354,10 +303,6 @@ export default {
       handleImageUpload,
       removeImage,
       submitPost,
-      toggleDropdown,
-      goToPage,
-      goToUserProfile,
-      handleLogout,
       fetchSections,
       fetchHotPosts, // 如果 RightBlock 需要，也暴露
     };
@@ -366,145 +311,52 @@ export default {
 </script>
 
 <style scoped>
-/* --- 基本布局和头部样式 (基本保持不变) --- */
+/* --- 基本布局样式 --- */
 #create-post {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-   background-color: #f7f8f9; /* 给页面一个背景色 */
+  background-color: #f7f8f9; /* 给页面一个背景色 */
 }
-
-.header {
-  /* ... (header styles remain the same) ... */
-   background-color: #ffffff;
-   height: 65px;
-   display: flex;
-   align-items: center;
-   padding: 0 10px;
-   justify-content: space-between;
-   position: fixed;
-   top: 0;
-   left: 0;
-   width: 100%;
-   z-index: 1001; /* 确保在最上层 */
-   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-}
-.logo img {
-  margin-left: 320px; /* 根据你的布局调整 */
-  height: 26px;
-  width: auto;
-}
-.page-title {
-   flex-grow: 1;
-   text-align: center;
-   font-size: 18px;
-   font-weight: 600;
-   /* 调整 margin-right 使其居中更准确 */
-   margin-right: calc(320px + 100px); /* 粗略估计右侧元素的宽度 */
-   color: #333;
-}
-
-.user-section {
-  position: absolute; /* 使用绝对定位 */
-  right: 320px; /* 定位到右侧 */
-  display: flex; /* 内部元素水平排列 */
-  align-items: center; /* 垂直居中 */
-}
-.user-section button { /* 登录按钮 */
-  background-color: #32373c;
-  color: white;
-  padding: 8px 15px; /* 调整内边距 */
-  border: none;
-  border-radius: 6px; /* 圆角 */
-  cursor: pointer;
-  font-size: 14px;
-  height: auto; /* 高度自适应 */
-  /* 移除不必要的 display: flex */
-}
-
-.user-section button:hover {
-  background-color: #2a3034;
-}
-
-.userinfo {
-  display: flex;
-  align-items: center;
-  position: relative;
-  cursor: pointer;
-}
-
-.avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  margin-right: 10px;
-  border: 2px solid #eee;
-}
-
-.username {
-  font-weight: 500;
-  color: #333;
-  font-size: 14px;
-}
-
-.dropdown {
-  position: absolute;
-  top: calc(100% + 5px); /* 调整与用户信息的距离 */
-  right: 0;
-  background-color: white;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* 增加阴影 */
-  border-radius: 6px; /* 圆角 */
-  padding: 8px 0; /* 内边距 */
-  z-index: 1002; /* 比 header 高 */
-  min-width: 100px; /* 最小宽度 */
-}
-
-.dropdown-item {
-  padding: 10px 20px; /* 调整内边距 */
-  cursor: pointer;
-  white-space: nowrap;
-  font-size: 14px;
-  color: #333;
-}
-
-.dropdown-item:hover {
-  background-color: #f5f5f5; /* 悬停背景色 */
-}
-
 
 main {
   display: flex;
   justify-content: center;
-  padding-top: 30px; /* Match Index */
-  margin-top: 10px;  /* Match Index */
-  overflow: visible; /* Ensure main doesn't clip */
+  padding-top: 30px;
+  /* 移除 min-height */
 }
 
 /* Styles for LeftBlock within CreatorCenter */
 :deep(.left-block) {
   width: 200px;
   margin-right: 20px; /* Match Index spacing */
-  position: sticky;
+  position: sticky; /* 改回 sticky */
   top: 85px; /* Match Index */
-  height: fit-content; /* Index doesn't specify height here */
-  align-self: flex-start;
-  overflow: visible !important; /* Match Index */
+  height: fit-content; /* 保持自适应高度 */
+  align-self: flex-start; /* 顶部对齐 */
+  /* 移除背景色 */
 }
 
-/* --- 表单区域样式 --- */
+/* 新增包裹层样式 */
+.center-content-wrapper {
+  width: 610px; /* 与 form-wrapper 宽度一致 */
+  margin: 0 20px; /* 保持左右间距 */
+  /* 设置最大高度并允许滚动 */
+  max-height: calc(100vh - 115px); /* 100vh - 导航栏高度 - main的padding-top */
+  overflow-y: auto;
+  /* 隐藏滚动条样式 (可选，根据 Index.vue) */
+  /* scrollbar-width: none;  /* Firefox */
+  /* &::-webkit-scrollbar { display: none; } /* Chrome, Safari, Opera */
+}
+
 .form-wrapper {
-  width: 610px; /* Match Index */
-  margin: 0 20px; /* Add horizontal margin similar to Index post-wrapper */
-  /* margin-right: 50px; */ /* Index has extra right margin, maybe not needed here */
+  /* 移除 width 和 margin，由父级 .center-content-wrapper 控制 */
   background-color: #ffffff;
   padding: 30px;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  margin-bottom: 20px;
-  overflow: visible !important; /* Match Index */
-  /* Remove scroll-specific styles */
-  /* overflow-y: auto; */
-  /* max-height: calc(100vh - 105px); */
+  margin-top: 10px;
+  /* 移除 margin-bottom */
 }
 
 .form-wrapper h2 {
@@ -683,17 +535,17 @@ main {
 
 /* Styles for RightBlock within CreatorCenter */
 :deep(.right-block) {
-  width: 300px; /* Using CreatorCenter's width */
+  width: 300px; /* CreatorCenter's width for RightBlock */
   margin-left: 20px; /* Match Index spacing */
-  position: sticky;
+  position: sticky; /* 改回 sticky */
   top: 85px; /* Match Index */
-  height: 500px; /* Match Index */
-  align-self: flex-start;
-  background-color: #ffffff; /* Keep own styles */
+  height: 500px; /* 保持原有的高度 */
+  align-self: flex-start; /* 顶部对齐 */
+  /* 确保有背景色或其他样式使其可见 */
+  background-color: #ffffff;
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  overflow: visible !important; /* Match Index */
 }
 
 .hot-posts-title {
