@@ -297,6 +297,7 @@ import { useRouter, useRoute } from 'vue-router';
 import axios from 'axios';
 import { Message, Document, Picture, Close, Star, Check, RefreshRight, Loading, Delete } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { eventBus } from '@/plugins/eventBus';
 
 const router = useRouter();
 const route = useRoute();
@@ -583,18 +584,12 @@ const loadContacts = async () => {
 
 // 选择会话
 const selectConversation = async (conversation) => {
-  // 验证会话对象和ID是否有效
-  if (!conversation || !conversation.id) {
-    console.error('尝试选择无效的会话:', conversation);
-    ElMessage.warning('无法选择会话，数据无效');
-    return;
-  }
-
-  console.log('选择会话:', conversation.id, conversation.username || conversation.otherUsername);
   selectedConversation.value = conversation;
-  console.log('设置当前选中会话为:', JSON.stringify(selectedConversation.value));
+  activeConversationId.value = conversation.id;
   
-  // 加载会话消息 - 让loadMessages函数处理临时会话ID的情况
+  console.log('选择会话:', conversation);
+  
+  // 加载消息
   await loadMessages(conversation.id);
   
   // 只有非临时会话才需要标记已读
@@ -612,6 +607,11 @@ const selectConversation = async (conversation) => {
       
       // 更新本地会话未读数
       conversation.unreadCount = 0;
+      
+      // 触发消息已读事件，更新页眉上的未读消息徽章
+      eventBus.emit('message:read');
+      
+      console.log('已标记会话为已读并发出全局事件');
     } catch (error) {
       console.error('标记会话已读失败:', error);
     }
@@ -840,289 +840,168 @@ const removeAttachment = () => {
 // 发送消息
 const sendMessage = async () => {
   // 检查消息内容和会话是否有效
-  if ((!newMessage.value.trim() && !attachmentPreview.value.show) || !selectedConversation.value) {
-    console.log('消息为空或没有选择会话，不发送');
+  if (!newMessage.value.trim() && !attachmentPreview.value.show) {
+    console.log('消息为空且没有附件，不发送');
     return;
   }
   
-  console.log('开始发送消息:', newMessage.value);
-
-  // 添加更详细的消息列表检查
-  console.log('消息列表类型检查:',
-    'messages.value类型:', typeof messages.value,
-    'Array.isArray(messages.value):', Array.isArray(messages.value),
-    'messages.value instanceof Object:', messages.value instanceof Object
-  );
+  // 检查是否有选中的会话
+  if (!selectedConversation.value) {
+    ElMessage.warning('请先选择一个对话');
+    return;
+  }
   
-  // 如果不是数组，强制转换为数组
+  // 防止messages.value不是数组
   if (!Array.isArray(messages.value)) {
-    console.warn('消息列表不是数组，正在重置为空数组', messages.value);
+    console.warn('messages.value不是数组，重置为空数组');
     messages.value = [];
   }
   
-  // 判断是否是临时会话ID
-  const isTemporaryChat = typeof selectedConversation.value.id === 'string' && 
-                         (selectedConversation.value.id.startsWith('new_') || 
-                          selectedConversation.value.id.startsWith('temp_'));
+  // 获取接收者ID
+  const receiverId = selectedConversation.value?.userId || 
+                     selectedConversation.value?.otherUserId;
+                     
+  if (!receiverId) {
+    console.error('无法确定接收者ID', selectedConversation.value);
+    ElMessage.warning('无法确定消息接收者');
+    return;
+  }
   
-  // 构建消息对象（临时ID用于前端展示）
-  const tempId = `temp_${Date.now()}`;
-  const newMessageData = {
-    id: tempId,
-    conversationId: selectedConversation.value.id,
-    senderId: currentUserId.value,
+  console.log('发送消息给用户:', receiverId);
+  
+  // 创建一个临时消息对象，显示在UI中
+  const tempMessage = {
+    id: `temp_${Date.now()}`,
+    content: newMessage.value,
     senderName: authStore.userInfo?.username,
-    senderAvatar: authStore.userInfo?.avatar,
-    receiverId: selectedConversation.value.userId || selectedConversation.value.otherUserId,
-    receiverName: selectedConversation.value.username,
-    receiverAvatar: selectedConversation.value.avatar,
-    content: newMessage.value.trim(),
+    senderId: authStore.userInfo?.id,
+    receiverId: receiverId,
     timestamp: new Date().toISOString(),
-    isSentByCurrentUser: true,
-    read: false
+    sendTime: new Date().toISOString(),
+    status: 'sending'
   };
   
-  // 如果有文件或图片附件
+  // 如果有附件，添加附件信息
   if (attachmentPreview.value.show) {
-    const file = attachmentPreview.value.file;
-    // 检查文件大小
-    if (file.size > 10 * 1024 * 1024) { // 10MB限制
-      ElMessage.error('文件大小不能超过10MB');
-      return;
-    }
-    
-    // 准备附件信息
-    newMessageData.attachment = {
-      name: file.name,
+    tempMessage.attachment = {
       type: attachmentPreview.value.type,
-      // 临时URL用于前端预览
-      url: attachmentPreview.value.url || URL.createObjectURL(file)
+      url: attachmentPreview.value.url,
+      name: attachmentPreview.value.name
     };
+    
+    // 图片类型的附件
+    if (attachmentPreview.value.type === 'image') {
+      tempMessage.attachmentType = 'image';
+      tempMessage.attachmentUrl = attachmentPreview.value.url;
+    } else {
+      // 文件类型的附件
+      tempMessage.attachmentType = 'file';
+      tempMessage.attachmentUrl = attachmentPreview.value.url;
+      tempMessage.attachmentName = attachmentPreview.value.name;
+    }
   }
   
-  // 先将消息添加到列表中（乐观UI更新）
-  if (!Array.isArray(messages.value)) {
-    messages.value = [];
-  }
-  messages.value = [...messages.value, newMessageData];
-  console.log('消息已添加到列表中，当前消息姓名:', newMessageData.senderName, '当前用户姓名:', authStore.userInfo?.username);
+  // 先在UI中添加这条消息
+  messages.value.push(tempMessage);
   
-  // 清空输入和附件选择
-  const messageContent = newMessage.value.trim(); // 保存内容用于日志
+  // 清空输入框和附件预览
   newMessage.value = '';
-  removeAttachment();
+  attachmentPreview.value.show = false;
   
-  // 滚动到底部显示新消息
+  // 更新会话的最后一条消息
+  if (selectedConversation.value) {
+    selectedConversation.value.lastMessage = tempMessage.content || '发送了一个附件';
+    selectedConversation.value.lastMessageTime = new Date().toISOString();
+    
+    // 如果是临时会话，确保其位于列表顶部
+    if (selectedConversation.value.id.startsWith('new_') || selectedConversation.value.id.startsWith('temp_')) {
+      const index = conversations.value.findIndex(c => c.id === selectedConversation.value.id);
+      if (index > 0) {
+        // 移到列表顶部
+        const conv = conversations.value.splice(index, 1)[0];
+        conversations.value.unshift(conv);
+      }
+    }
+  }
+  
+  // 滚动到底部
+  await nextTick();
   scrollToBottom();
   
-  // 构建要发送的消息数据
-  const messageData = {
-    receiverId: newMessageData.receiverId,
-    content: newMessageData.content,
-  };
-  
-  // 如果不是新会话则添加会话ID
-  if (!isTemporaryChat) {
-    // 对于非临时会话ID，检查是否需要转换为数字
-    if (typeof selectedConversation.value.id === 'string' && !isNaN(parseInt(selectedConversation.value.id))) {
-      messageData.conversationId = parseInt(selectedConversation.value.id);
-    } else {
-      messageData.conversationId = selectedConversation.value.id;
-    }
-  }
-  
-  console.log('准备发送的消息数据:', messageData);
-  
-  // 处理文件上传
-  if (newMessageData.attachment) {
-    try {
-      const file = attachmentPreview.value.file;
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-      const uploadResponse = await axios.post('http://localhost:7070/api/upload', formData, {
-        headers: {
-          'Authorization': `Bearer ${jwtToken}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      if (uploadResponse.status === 200) {
-        messageData.attachment = {
-          url: uploadResponse.data.url,
-          name: file.name,
-          type: newMessageData.attachment.type
-        };
-      }
-    } catch (error) {
-      console.error('文件上传失败:', error);
-      // 标记消息发送失败
-      const messageIndex = messages.value.findIndex(msg => msg.id === tempId);
-      if (messageIndex !== -1) {
-        messages.value[messageIndex].sendFailed = true;
-      }
-      ElMessage.error('文件上传失败，请检查网络连接或者稍后重试');
-      return;
-    }
-  }
-  
-  // 发送消息到服务器
   try {
     const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-    console.log('开始发送API请求...');
     
+    // 准备发送的消息数据
+    const messageData = {
+      content: tempMessage.content,
+      receiverId: receiverId
+    };
+    
+    // 如果有附件，添加附件信息
+    if (tempMessage.attachment) {
+      messageData.attachmentType = tempMessage.attachmentType;
+      messageData.attachmentUrl = tempMessage.attachmentUrl;
+      if (tempMessage.attachmentName) {
+        messageData.attachmentName = tempMessage.attachmentName;
+      }
+    }
+    
+    // 发送消息到服务器
+    console.log('发送消息数据:', messageData);
     const response = await axios.post('http://localhost:7070/api/messages/send', messageData, {
       headers: {
-        'Authorization': `Bearer ${jwtToken}`,
-        'Content-Type': 'application/json'
+        'Authorization': `Bearer ${jwtToken}`
       }
     });
     
-    console.log('消息发送API响应:', response);
+    console.log('消息发送响应:', response);
     
-    if (response.status === 200) {
-      console.log('发送消息成功，API响应:', response.data);
+    if (response.status === 200 || response.status === 201) {
+      console.log('消息发送成功:', response.data);
       
-      // 新的对话需要更新ID
-      if (isTemporaryChat) {
-        // 从API响应中尝试获取会话ID
-        let conversationId;
+      // 更新临时消息的状态为已发送，并用服务器返回的消息ID替换临时ID
+      const serverMessageId = response.data.id || response.data.data?.id;
+      
+      // 找到临时消息的索引
+      const tempIndex = messages.value.findIndex(m => m.id === tempMessage.id);
+      if (tempIndex !== -1) {
+        // 更新消息状态
+        messages.value[tempIndex].id = serverMessageId || tempMessage.id;
+        messages.value[tempIndex].status = 'sent';
+        delete messages.value[tempIndex].sendFailed;
+      }
+      
+      // 如果这是一个新会话，尝试从响应中获取真实的会话ID
+      if (selectedConversation.value.id.startsWith('new_') || selectedConversation.value.id.startsWith('temp_')) {
+        const conversationId = response.data.conversationId || 
+                             response.data.data?.conversationId || 
+                             null;
         
-        // 尝试多种可能的字段名找到会话ID
-        if (response.data && response.data.conversationId) {
-          conversationId = response.data.conversationId;
-        } else if (response.data && response.data.id) {
-          conversationId = response.data.id;
-        } else if (response.data && response.data.data) {
-          // 尝试在data子对象中查找
-          if (response.data.data.conversationId) {
-            conversationId = response.data.data.conversationId;
-          } else if (response.data.data.id) {
-            conversationId = response.data.data.id;
-          }
-        }
-        
-        // 如果找不到会话ID，使用接收者ID作为备选
-        if (!conversationId && response.data && response.data.receiverId) {
-          conversationId = response.data.receiverId;
-          console.warn('无法从API响应中找到会话ID，使用receiverId代替:', conversationId);
-        } else if (!conversationId) {
-          // 最后的备选：使用一个随机ID加上时间戳
-          conversationId = new Date().getTime();
-          console.warn('无法获取有效会话ID，使用时间戳代替:', conversationId);
-        }
-        
-        console.log('创建临时会话后获取到会话ID:', conversationId);
-        
-        // 创建新的会话对象
-        const newConversation = {
-          id: conversationId,
-          userId: selectedConversation.value.userId || selectedConversation.value.otherUserId,
-          otherUserId: selectedConversation.value.userId || selectedConversation.value.otherUserId,
-          username: selectedConversation.value.username,
-          avatar: selectedConversation.value.avatar,
-          lastMessage: messageData.content || (messageData.attachment ? 
-            `[${messageData.attachment.type === 'image' ? '图片' : '文件'}]` : ''),
-          lastMessageTime: new Date().toISOString(),
-          unreadCount: 0
-        };
-        
-        console.log('新创建的会话对象:', newConversation);
-        
-        // 替换临时会话并更新选中的会话
-        const tempIndex = conversations.value.findIndex(c => c.id === selectedConversation.value.id);
-        if (tempIndex !== -1) {
-          conversations.value.splice(tempIndex, 1, newConversation);
-        } else {
-          conversations.value.unshift(newConversation);
-        }
-        
-        // 更新当前选中的会话
-        selectedConversation.value = newConversation;
-        activeConversationId.value = newConversation.id;
-        
-        // 用实际获取的消息替换临时消息
-        const messageIndex = messages.value.findIndex(msg => msg.id === tempId);
-        if (messageIndex !== -1) {
-          const serverMessage = response.data;
-          // 确保消息包含会话ID
-          if (serverMessage) {
-            serverMessage.conversationId = conversationId;
-            messages.value.splice(messageIndex, 1, serverMessage);
-          }
-        }
-      } else {
-        // 更新现有会话的最后消息
-        const conversationIndex = conversations.value.findIndex(c => c.id === selectedConversation.value.id);
-        if (conversationIndex !== -1) {
-          conversations.value[conversationIndex].lastMessage = messageData.content || 
-            (messageData.attachment ? `[${messageData.attachment.type === 'image' ? '图片' : '文件'}]` : '');
-          conversations.value[conversationIndex].lastMessageTime = new Date().toISOString();
+        if (conversationId) {
+          console.log('获取到真实会话ID:', conversationId);
+          // 更新会话ID
+          selectedConversation.value.id = conversationId;
+          activeConversationId.value = conversationId;
           
-          // 将这个会话移到列表顶部
-          const updatedConversation = conversations.value.splice(conversationIndex, 1)[0];
-          conversations.value.unshift(updatedConversation);
-        }
-        
-        // 用实际获取的消息替换临时消息
-        const messageIndex = messages.value.findIndex(msg => msg.id === tempId);
-        if (messageIndex !== -1) {
-          const serverMessage = response.data;
-          // 确保消息包含会话ID
-          if (serverMessage) {
-            messages.value.splice(messageIndex, 1, serverMessage);
+          // 更新会话列表中的项
+          const index = conversations.value.findIndex(c => 
+            c.id === tempMessage.id || c.id.startsWith('new_') || c.id.startsWith('temp_')
+          );
+          if (index !== -1) {
+            conversations.value[index].id = conversationId;
           }
         }
       }
       
-      console.log('消息发送完成，更新了UI');
-      
-      // 消息发送成功后，立即重新获取最新的消息列表
-      try {
-        const targetUserId = selectedConversation.value.userId || selectedConversation.value.otherUserId;
-        console.log('正在重新获取最新消息列表，用户ID:', targetUserId);
-        
-        const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-        const refreshResponse = await axios.get(`http://localhost:7070/api/messages/${targetUserId}`, {
-          headers: {
-            'Authorization': `Bearer ${jwtToken}`
-          }
-        });
-        
-        if (refreshResponse.status === 200) {
-          console.log('重新获取消息成功:', refreshResponse.data);
-          
-          // 提取消息数组，正确处理API返回的数据结构
-          let messagesData = [];
-          if (refreshResponse.data && Array.isArray(refreshResponse.data)) {
-            messagesData = refreshResponse.data;
-          } else if (refreshResponse.data && refreshResponse.data.data && Array.isArray(refreshResponse.data.data)) {
-            messagesData = refreshResponse.data.data;
-          } else {
-            console.warn('消息刷新API响应格式不符合预期');
-            return; // 不更新消息列表
-          }
-          
-          // 更新消息列表并滚动到底部
-          messages.value = messagesData;
-          nextTick(() => {
-            scrollToBottom();
-          });
-        }
-      } catch (refreshError) {
-        console.error('重新获取消息失败:', refreshError);
-        // 这个错误不会影响用户体验，所以不显示错误提示
-      }
+      // 在发送消息后更新未读消息数量，可能会收到新消息
+      // 发送事件通知徽章组件更新
+      eventBus.emit('message:read');
+    } else {
+      markMessageAsFailed(tempMessage.id);
     }
   } catch (error) {
     console.error('发送消息失败:', error);
-    // 标记消息发送失败
-    const messageIndex = messages.value.findIndex(msg => msg.id === tempId);
-    if (messageIndex !== -1) {
-      messages.value[messageIndex].sendFailed = true;
-    }
-    ElMessage.error('消息发送失败，请检查网络连接后重试');
+    markMessageAsFailed(tempMessage.id);
   }
 };
 
@@ -1412,29 +1291,46 @@ const createNewConversation = async (userId) => {
   
   console.log('正在创建新会话，用户ID:', userId);
   
-  // 尝试从现有联系人中获取用户信息
-  let user = contacts.value.find(contact => contact.id === userId);
-  
-  // 如果联系人列表中没有，尝试通过API获取用户信息
-  if (!user) {
-    try {
-      const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-      const response = await axios.get(`http://localhost:7070/api/users/${userId}`, {
-        headers: {
-          'Authorization': `Bearer ${jwtToken}`
-        }
-      });
-      
-      if (response.status === 200 && response.data) {
-        user = response.data;
-        console.log('通过API获取的用户信息:', user);
-      } else {
-        throw new Error('无法获取用户信息');
+  try {
+    // 先尝试通过API获取完整的用户信息
+    const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+    const response = await axios.get(`http://localhost:7070/api/users/${userId}`, {
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`
       }
-    } catch (error) {
-      console.error('获取用户信息失败:', error);
+    });
+    
+    let user;
+    
+    if (response.status === 200) {
+      // 处理不同的API响应格式
+      if (response.data && response.data.data) {
+        user = response.data.data;
+      } else if (response.data) {
+        user = response.data;
+      }
       
-      // 创建一个基本的用户对象，确保UI能够继续工作
+      console.log('通过API获取的用户信息:', user);
+      
+      // 确保用户信息是完整的
+      if (!user || !user.id) {
+        throw new Error('获取的用户信息不完整');
+      }
+      
+      // 标准化头像字段 - API可能返回avatar或imageUrl
+      user.avatar = user.avatar || user.imageUrl || null;
+    } else {
+      throw new Error('API返回非200状态码');
+    }
+    
+    // 如果API不成功，尝试从联系人列表中查找
+    if (!user) {
+      user = contacts.value.find(contact => contact.id === userId);
+      console.log('从联系人列表找到用户:', user);
+    }
+    
+    // 如果仍然找不到用户信息，创建一个基本的用户对象
+    if (!user) {
       user = {
         id: userId,
         username: '用户#' + userId,
@@ -1442,49 +1338,103 @@ const createNewConversation = async (userId) => {
       };
       console.log('创建了基本用户信息:', user);
     }
+    
+    // 创建新的会话对象，确保所有必要的属性都存在
+    const newConversation = {
+      id: 'new_' + Date.now(), // 使用new_前缀而不是temp_，以便更清晰地标识
+      userId: user.id,
+      otherUserId: user.id, // 设置otherUserId确保API兼容性
+      username: user.username || '未知用户',
+      avatar: user.avatar || null,
+      lastMessage: '',
+      unreadCount: 0,
+      lastActivity: new Date().toISOString(),
+      lastMessageTime: new Date().toISOString(),
+      isNew: true
+    };
+    
+    console.log('创建的新会话对象:', newConversation);
+    
+    // 添加到会话列表
+    conversations.value.unshift(newConversation);
+    
+    // 选择新会话
+    selectedConversation.value = newConversation;
+    activeConversationId.value = newConversation.id;
+    
+    // 确保activeTab是chats
+    activeTab.value = 'chats';
+    
+    // 清空消息列表，因为这是一个新会话
+    messages.value = [];
+    
+    // 发送系统消息，表示开始了新的对话
+    messages.value.push({
+      id: 'system_' + Date.now(),
+      isSystem: true,
+      content: `与 ${newConversation.username} 的会话开始了`,
+      timestamp: new Date().toISOString()
+    });
+    
+    // 滚动到底部并聚焦输入框
+    nextTick(() => {
+      scrollToBottom();
+      if (messageInputRef.value) {
+        messageInputRef.value.focus();
+      }
+    });
+    
+    return newConversation;
+  } catch (error) {
+    console.error('创建新会话过程中出错:', error);
+    
+    // 创建一个基本的会话对象，确保UI能够继续工作
+    const fallbackConversation = {
+      id: 'new_' + Date.now(),
+      userId: userId,
+      otherUserId: userId,
+      username: '用户#' + userId,
+      avatar: null,
+      lastMessage: '',
+      unreadCount: 0,
+      lastActivity: new Date().toISOString(),
+      lastMessageTime: new Date().toISOString(),
+      isNew: true
+    };
+    
+    console.log('创建基本会话对象作为fallback:', fallbackConversation);
+    
+    // 添加到会话列表
+    conversations.value.unshift(fallbackConversation);
+    
+    // 选择新会话
+    selectedConversation.value = fallbackConversation;
+    activeConversationId.value = fallbackConversation.id;
+    
+    // 确保activeTab是chats
+    activeTab.value = 'chats';
+    
+    // 清空消息列表
+    messages.value = [];
+    
+    // 添加系统消息
+    messages.value.push({
+      id: 'system_' + Date.now(),
+      isSystem: true,
+      content: `与此用户的会话开始了`,
+      timestamp: new Date().toISOString()
+    });
+    
+    // 滚动到底部并聚焦输入框
+    nextTick(() => {
+      scrollToBottom();
+      if (messageInputRef.value) {
+        messageInputRef.value.focus();
+      }
+    });
+    
+    return fallbackConversation;
   }
-  
-  // 创建新的会话对象
-  const newConversation = {
-    id: 'temp_' + Date.now(),
-    userId: user.id,
-    username: user.username || '未知用户',
-    avatar: user.avatar || null,
-    lastMessage: null,
-    unreadCount: 0,
-    lastActivity: new Date().toISOString(),
-    isNew: true
-  };
-  
-  console.log('创建的新会话对象:', newConversation);
-  
-  // 添加到会话列表
-  conversations.value.unshift(newConversation);
-  
-  // 选择新会话
-  selectedConversation.value = newConversation;
-  activeConversationId.value = newConversation.id;
-  
-  // 清空消息列表，因为这是一个新会话
-  messages.value = [];
-  
-  // 发送系统消息，表示开始了新的对话
-  messages.value.push({
-    id: 'system_' + Date.now(),
-    isSystem: true,
-    content: `与 ${newConversation.username} 的会话开始了`,
-    timestamp: new Date().toISOString()
-  });
-  
-  // 滚动到底部并聚焦输入框
-  nextTick(() => {
-    scrollToBottom();
-    if (messageInputRef.value) {
-      messageInputRef.value.focus();
-    }
-  });
-  
-  return newConversation;
 };
 
 // 格式化日期的辅助函数
@@ -1627,63 +1577,36 @@ onMounted(() => {
 // 修改加载消息的方法，支持直接通过用户ID加载消息
 const loadMessagesByUserId = async (userId) => {
   try {
-    if (!authStore.isLoggedIn || !userId) return;
+    console.log('通过用户ID加载消息:', userId);
     
-    console.log('通过用户ID直接加载消息历史:', userId);
-    const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+    if (!userId || userId === 'undefined') {
+      console.error('尝试通过无效的用户ID加载消息:', userId);
+      return;
+    }
     
-    // 调用API获取与特定用户的消息历史
-    const response = await axios.get(`http://localhost:7070/api/messages/user/${userId}`, {
-      headers: {
-        'Authorization': `Bearer ${jwtToken}`
-      }
-    });
+    // 查找是否已存在与该用户的会话
+    const existingConversation = conversations.value.find(c => 
+      c.userId === userId || c.otherUserId === userId);
     
-    if (response.status === 200) {
-      console.log('直接加载用户消息成功:', response.data);
+    if (existingConversation) {
+      console.log('找到现有会话:', existingConversation);
       
-      // 处理API返回的消息数据
-      let messagesData = [];
-      if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        messagesData = response.data.data;
-      } else if (Array.isArray(response.data)) {
-        messagesData = response.data;
-      } else {
-        console.warn('API响应格式不符合预期，使用空数组');
-        messagesData = [];
-      }
-      
-      // 确保messagesData是数组
-      console.log('messagesData是数组:', Array.isArray(messagesData), '长度:', messagesData.length);
-      
-      // 设置消息列表
-      messages.value = messagesData;
-      
-      // 滚动到最新消息
-      await nextTick();
-      scrollToBottom();
-      
-      return messagesData;
+      // 选择现有会话 - 这会自动加载消息和标记为已读
+      selectConversation(existingConversation);
+    } else {
+      console.log('未找到现有会话，创建新的会话');
+      // 用户ID存在但没有现有会话，创建一个新会话
+      await createNewConversation(userId);
+    }
+    
+    // 在处理完成后，如果消息已加载，也触发一次消息已读事件
+    if (messages.value && messages.value.length > 0) {
+      eventBus.emit('message:read');
     }
   } catch (error) {
     console.error('通过用户ID加载消息失败:', error);
-    ElMessage.error('无法加载与该用户的消息历史，请稍后再试');
-    messages.value = []; // 清空消息列表
-    
-    // 添加一条系统消息
-    messages.value = [{
-      id: `system_${Date.now()}`,
-      isSystem: true,
-      content: `无法加载历史消息，这可能是一个新对话`,
-      timestamp: new Date().toISOString()
-    }];
-    
-    // 滚动到底部
-    await nextTick();
-    scrollToBottom();
+    ElMessage.error('加载消息失败，请重试');
   }
-  
-  return [];
 };
 
 const messageInputRef = ref(null);
@@ -1692,6 +1615,15 @@ const messageInputRef = ref(null);
 const determineIfSent = (message) => {
   // 使用用户名匹配判断消息发送方向
   return message.senderName === authStore.userInfo?.username;
+};
+
+// 将消息标记为发送失败
+const markMessageAsFailed = (messageId) => {
+  const index = messages.value.findIndex(m => m.id === messageId);
+  if (index !== -1) {
+    messages.value[index].sendFailed = true;
+    messages.value[index].sending = false;
+  }
 };
 </script>
 

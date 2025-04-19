@@ -7,6 +7,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import axios from 'axios';
+import { eventBus } from '@/plugins/eventBus';
 
 const totalUnread = ref(0);
 let intervalId = null;
@@ -29,16 +30,28 @@ const fetchUnreadCount = async () => {
   }
 };
 
+// 消息已读事件处理函数
+const handleMessageRead = () => {
+  console.log('收到消息已读事件，立即更新未读消息数');
+  fetchUnreadCount();
+};
+
 onMounted(() => {
   fetchUnreadCount();
   // 每30秒更新一次未读消息数
   intervalId = setInterval(fetchUnreadCount, 30000);
+  
+  // 监听消息已读事件
+  eventBus.on('message:read', handleMessageRead);
 });
 
 onBeforeUnmount(() => {
   if (intervalId) {
     clearInterval(intervalId);
   }
+  
+  // 移除事件监听
+  eventBus.off('message:read', handleMessageRead);
 });
 </script>
 
@@ -50,7 +63,8 @@ onBeforeUnmount(() => {
   background-color: #f56c6c;
   color: white;
   border-radius: 10px;
-  
+  min-width: 20px;
+  height: 20px;
   font-size: 12px;
   display: flex;
   align-items: center;
