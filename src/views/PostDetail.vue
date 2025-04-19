@@ -77,7 +77,7 @@
               style="cursor: pointer">
           {{ comment.user?.username || '匿名用户' }}
         </span>
-      </div>
+</div>
 
       <div class="comment-content" 
            @click="setReplyContext(comment.id, comment.user?.id)"
@@ -144,8 +144,8 @@
       <div v-if="contextMenu.type === 'user'" class="menu-item" @click="goToUserProfile(contextMenu.userId)">
         <i class="el-icon-user"></i> 查看主页
       </div>
-    </div>
-    
+  </div>
+  
     <!-- 私信弹窗 -->
     <div v-if="showMessageDialog" class="message-dialog-overlay">
       <div class="message-dialog">
@@ -187,9 +187,9 @@ export default defineComponent({
     const authStore = useAuthStore();
     const isLiked = ref(false);
     const replyContext = ref({
-      parentCommentId: null,
-      replyToUserId: null
-    });
+  parentCommentId: null,
+  replyToUserId: null
+});
     
     // 添加上下文菜单状态
     const contextMenu = ref({
@@ -315,7 +315,7 @@ export default defineComponent({
         recordPostExit();
       }
     });
-
+    
     const hotPosts = computed(() => {
       if (!post.value || !post.value.relatedPosts) return [];
       return post.value.relatedPosts.slice(0, 5);
@@ -345,7 +345,7 @@ export default defineComponent({
 
         if (!jwtToken) {
           console.error('未找到认证令牌');
-          return;
+    return;
         }
 
         const response = await axios.get('/api/post-detail', {

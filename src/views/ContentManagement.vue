@@ -747,7 +747,7 @@ main {
   border-radius: 8px;
   padding: 20px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
-  margin-top: 130px; /* 为顶部固定的内容区域留出空间 */
+  margin-top: 280px; /* 为顶部固定的内容区域留出空间 */
   height: calc(100vh - 295px); /* 设置固定高度 */
   overflow-y: auto; /* 允许垂直滚动 */
   scrollbar-width: none; /* Firefox 隐藏滚动条 */
@@ -985,7 +985,7 @@ main {
   padding: 20px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
   margin-top: 130px;
-  height: calc(100vh - 295px);
+  height: calc(100vh - 190px);
   overflow-y: auto;
 }
 
