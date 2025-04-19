@@ -13,7 +13,7 @@
             </div>
             <div class="form-group">
               <label for="content">内容:</label>
-              <textarea id="content" v-model="post.content" required></textarea>
+              <textarea id="content" v-model="post.content" required @input="handleContentInput"></textarea>
             </div>
 
             <!-- 新的图片上传区域 -->
@@ -65,7 +65,7 @@
 </template>
 
 <script>
-import { ref, onMounted, reactive } from 'vue';
+import { ref, onMounted, reactive, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import axios from 'axios';
@@ -82,6 +82,7 @@ export default {
     const router = useRouter();
     const authStore = useAuthStore();
     const hotPosts = ref([]);
+    const contentTextarea = ref(null); // 添加对 textarea 的引用
 
     const post = reactive({
       title: '',
@@ -97,6 +98,23 @@ export default {
     const errorMessage = ref('');
     const successMessage = ref('');
     const maxFiles = 5; // 最大文件数
+
+    // 添加自动调整文本框高度的方法
+    const adjustTextareaHeight = () => {
+      if (!contentTextarea.value) return;
+      
+      // 重置高度以获取正确的scrollHeight
+      contentTextarea.value.style.height = 'auto';
+      // 设置高度为scrollHeight
+      contentTextarea.value.style.height = contentTextarea.value.scrollHeight + 'px';
+    };
+
+    // 监听内容变化以调整高度
+    const handleContentInput = () => {
+      nextTick(() => {
+        adjustTextareaHeight();
+      });
+    };
 
     // 获取热门帖子 (假设 RightBlock 可能需要)
     const fetchHotPosts = async () => {
@@ -287,6 +305,14 @@ export default {
       // 页面加载时获取分区列表和热门帖子
       fetchSections();
       fetchHotPosts(); // 确保 fetchHotPosts 也被调用
+      
+      // 初始调整一次文本框高度
+      nextTick(() => {
+        contentTextarea.value = document.getElementById('content');
+        if (contentTextarea.value) {
+          adjustTextareaHeight();
+        }
+      });
     });
 
     return {
@@ -305,6 +331,7 @@ export default {
       submitPost,
       fetchSections,
       fetchHotPosts, // 如果 RightBlock 需要，也暴露
+      handleContentInput, // 新增：暴露内容输入处理方法
     };
   }
 };
@@ -408,11 +435,12 @@ main {
 }
 
 .form-group textarea {
-  min-height: 200px; /* 增加文本域最小高度 */
-  resize: vertical; /* 可以保留或移除，看是否需要手动调整 */
+  min-height: 200px; /* 保持最小高度 */
+  resize: none; /* 移除手动调整大小功能，由自动高度取代 */
   line-height: 1.6;
   height: auto; /* 明确设置高度为自动 */
-  overflow: hidden; /* 隐藏内部滚动条，配合 height: auto */
+  overflow: hidden; /* 隐藏内部滚动条 */
+  box-sizing: border-box; /* 确保边框和内边距计入宽高 */
 }
 
 /* --- 图片上传区域样式 --- */
