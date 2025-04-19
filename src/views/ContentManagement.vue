@@ -28,8 +28,8 @@
           </div>
         </div>
         
-        <!-- 帖子列表 -->
-        <div class="posts-list" v-if="!showAnalytics">
+        <!-- 帖子列表 - 使用 v-show 替代 v-if，并添加 pageReady 条件 -->
+        <div class="posts-list" v-show="!showAnalytics && pageReady">
           <div v-if="isLoading && userPosts.length === 0" class="loading">加载中...</div>
           <div v-else-if="userPosts.length === 0" class="no-posts">
             暂无帖子，开始创作吧！
@@ -93,8 +93,8 @@
           </div>
         </div>
         
-        <!-- 数据分析面板 -->
-        <div v-if="showAnalytics" class="analytics-panel">
+        <!-- 数据分析面板 - 使用 v-show 替代 v-if，并添加 pageReady 条件 -->
+        <div v-show="showAnalytics && pageReady" class="analytics-panel">
           <div class="analytics-header">
             <div class="analytics-title">
               <button class="back-button" @click="closeAnalytics">返回</button>
@@ -385,13 +385,19 @@
             </div>
           </div>
         </div>
+        
+        <!-- 添加一个加载指示器，当页面还未准备好时显示 -->
+        <div v-if="!pageReady" class="initial-loading">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">加载中...</div>
+        </div>
       </div>
     </main>
   </div>
 </template>
 
 <script>
-import { defineComponent, ref, onMounted, onBeforeUnmount, computed } from 'vue';
+import { defineComponent, ref, onMounted, onBeforeUnmount, computed, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import axios from 'axios';
@@ -412,6 +418,9 @@ export default defineComponent({
     const totalViews = ref(0);
     const totalLikes = ref(0);
     const totalComments = ref(0);
+    
+    // 添加一个页面初始加载状态控制
+    const pageReady = ref(false);
     
     // 添加分页相关变量
     const currentPage = ref(1);
@@ -976,12 +985,33 @@ export default defineComponent({
         app.style.overflow = 'hidden';
       }
       
-      // 只允许帖子列表滚动
-      const postsList = document.querySelector('.posts-list');
-      if (postsList) {
-        postsList.style.overflow = 'auto';
-        postsList.style.height = `${window.innerHeight - 295}px`;
-      }
+      // 延迟一点时间确保布局计算正确
+      setTimeout(() => {
+        // 设置页面准备好的状态
+        pageReady.value = true;
+        
+        // 确保在一些特殊情况下也能正确渲染（例如从其他页面返回）
+        nextTick(() => {
+          // 获取帖子列表和内容头部元素
+          const postsList = document.querySelector('.posts-list');
+          const contentHeader = document.querySelector('.content-header');
+          
+          if (postsList && contentHeader) {
+            // 获取 content-header 的实际高度
+            const headerHeight = contentHeader.offsetHeight;
+            // 设置帖子列表的顶部间距，确保不重叠
+            // postsList.style.marginTop = `${headerHeight + 20}px`; // 20px的额外间距
+            
+            // 重新计算帖子列表的高度
+            const topNavHeight = 75; // 顶部导航栏高度
+            const bottomPadding = 20; // 底部间距
+            postsList.style.height = `${window.innerHeight - topNavHeight - headerHeight - 20 - bottomPadding}px`;
+            
+            // 确保可以滚动
+            postsList.style.overflowY = 'auto';
+          }
+        });
+      }, 300); // 300ms的延迟通常足够等待布局渲染
     });
     
     // 组件卸载时恢复滚动
@@ -1028,8 +1058,9 @@ export default defineComponent({
       hideTooltip,
       tooltip,
       contentScore,
-      truncateTitle,   // 暴露截断函数给模板
-      truncateContent, // 暴露截断函数给模板
+      truncateTitle,
+      truncateContent,
+      pageReady
     };
   }
 });
@@ -1732,5 +1763,38 @@ svg polyline {
   margin-bottom: 20px;
   padding-top: 20px;
   border-top: 1px solid #eee;
+}
+
+/* 添加初始加载时的样式 */
+.initial-loading {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid #f3f3f3;
+  border-top: 5px solid #409EFF;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+.loading-text {
+  color: #666;
+  font-size: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 </style>
