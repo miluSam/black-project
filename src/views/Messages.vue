@@ -124,22 +124,22 @@
                 <!-- 对系统消息使用特殊样式 -->
                 <div v-if="message.isSystem" class="system-message">
                   {{ message.content }}
-                  <div class="message-time">{{ formatTime(message.timestamp || message.sendTime) }}</div>
+                  <div class="message-time">{{ formatTime(message.sendTime || message.timestamp) }}</div>
                 </div>
                 <template v-else>
                   <div :class="['message-bubble', message.sendFailed ? 'failed' : '']">
-                    <template v-if="message.attachment">
-                      <div v-if="message.attachment.type === 'image'" class="message-image">
+                    <template v-if="message.attachment || message.attachmentUrl">
+                      <div v-if="(message.attachment && message.attachment.type === 'image') || message.attachmentType === 'image'" class="message-image">
                         <el-image 
-                          :src="message.attachment.url" 
-                          :preview-src-list="[message.attachment.url]"
+                          :src="message.attachment?.url || message.attachmentUrl" 
+                          :preview-src-list="[message.attachment?.url || message.attachmentUrl]"
                           fit="cover">
                         </el-image>
                       </div>
                       <div v-else class="message-file">
                         <i class="el-icon-document"></i>
-                        <span class="file-name">{{ message.attachment.name }}</span>
-                        <a :href="message.attachment.url" target="_blank" class="file-download">
+                        <span class="file-name">{{ message.attachment?.name || message.attachmentName }}</span>
+                        <a :href="message.attachment?.url || message.attachmentUrl" target="_blank" class="file-download">
                           <i class="el-icon-download"></i>
                         </a>
                       </div>
@@ -149,7 +149,7 @@
                       <el-icon><RefreshRight /></el-icon> 重试
                     </button>
                   </div>
-                  <div class="message-time">{{ formatTime(message.timestamp || message.sendTime) }}</div>
+                  <div class="message-time">{{ formatTime(message.sendTime || message.timestamp) }}</div>
                 </template>
               </div>
             </div>
@@ -1496,23 +1496,24 @@ const formatDate = (dateStr) => {
 const formatTime = (timestamp) => {
   if (!timestamp) return '';
   
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diff = now - date;
-  
-  // 今天的消息只显示时间
-  if (date.toDateString() === now.toDateString()) {
-    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  // 直接从时间字符串提取时间部分，格式如"2025-04-19T16:27:57.000Z"
+  try {
+    // 使用正则表达式提取时间部分
+    const timeMatch = timestamp.match(/T(\d{2}):(\d{2}):/);
+    if (timeMatch) {
+      // 直接使用提取的小时和分钟，不进行时区调整
+      const hour = timeMatch[1];
+      const minute = timeMatch[2];
+      
+      return `${hour}:${minute}`;
+    }
+    
+    // 如果无法匹配，直接返回原始时间的一部分
+    return timestamp.substring(11, 16);
+  } catch (e) {
+    console.error('解析日期出错:', e);
+    return timestamp; // 出错时返回原始值
   }
-  
-  // 一周内的消息显示星期几
-  if (diff < 7 * 24 * 60 * 60 * 1000) {
-    const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    return days[date.getDay()];
-  }
-  
-  // 其他情况显示日期
-  return `${date.getMonth() + 1}月${date.getDate()}日`;
 };
 
 // 加载转发对话框中的用户收藏帖子
@@ -1686,32 +1687,8 @@ const messageInputRef = ref(null);
 
 // 增加新的辅助函数，判断消息是否由当前用户发送
 const determineIfSent = (message) => {
-  // 添加调试日志，帮助分析每个消息的状态
-  console.log(`消息ID:${message.id}, isSentByCurrentUser:${message.isSentByCurrentUser}, 
-    senderId:${message.senderId}, currentUserId:${currentUserId.value}, 
-    senderName:${message.senderName}`);
-
-  if (message.isSentByCurrentUser === true) {
-    return true;
-  }
-  
-  // 检查当前用户名是否与发送者名称匹配
-  if (message.senderName === authStore.userInfo?.username) {
-    return true;
-  }
-
-  // 检查senderId是否与当前用户ID匹配
-  if (message.senderId && currentUserId.value && 
-      message.senderId.toString() === currentUserId.value.toString()) {
-    return true;
-  }
-  
-  // 补充：检查消息的创建方式（本地创建的临时消息显示在右侧）
-  if (message.id && typeof message.id === 'string' && message.id.startsWith('temp_')) {
-    return true;
-  }
-  
-  return false;
+  // 使用用户名匹配判断消息发送方向
+  return message.senderName === authStore.userInfo?.username;
 };
 </script>
 
@@ -1991,6 +1968,8 @@ main {
                     linear-gradient(90deg, rgba(255, 255, 255, 0.7) 1px, transparent 1px);
   background-size: 20px 20px; /* 创建微妙的网格背景 */
   margin-bottom: 70px; /* 为固定定位的输入区域腾出空间 */
+  display: flex;
+  flex-direction: column;
 }
 
 /* 隐藏Chrome、Safari等浏览器的滚动条 */
@@ -2003,6 +1982,8 @@ main {
   max-width: 70%;
   display: flex;
   flex-direction: column;
+  width: auto;
+  position: relative;
 }
 
 .sent {
@@ -2015,12 +1996,18 @@ main {
   margin-left: 10px !important;
 }
 
+.system {
+  align-self: center !important;
+  max-width: 90%;
+}
+
 .message-bubble {
   padding: 12px 16px;
   border-radius: 18px;
   word-break: break-word;
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08); /* 增强气泡阴影 */
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08);
   line-height: 1.4;
+  max-width: 100%;
 }
 
 .sent .message-bubble {
@@ -2037,16 +2024,19 @@ main {
   border: 1px solid #eaedf3 !important;
 }
 
+/* 时间样式调整 */
 .message-time {
   font-size: 12px;
-  color: #94a3b8; /* 更柔和的时间颜色 */
+  color: #94a3b8;
   margin-top: 5px;
-  align-self: flex-end;
 }
 
-.message-item.system .message-time {
-  align-self: center;
-  margin-top: 2px;
+.sent .message-time {
+  text-align: right !important;
+}
+
+.received .message-time {
+  text-align: left !important;
 }
 
 .message-input {
@@ -2661,5 +2651,64 @@ main {
 .delete-conversation-btn:hover {
   background-color: #f56c6c;
   color: white;
+}
+
+/* 消息项样式调整 */
+.message-item {
+  margin-bottom: 15px;
+  max-width: 70%;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  position: relative;
+}
+
+.sent {
+  margin-left: auto !important; /* 这会使元素靠右对齐 */
+  margin-right: 0 !important;
+}
+
+.received {
+  margin-right: auto !important; /* 这会使元素靠左对齐 */
+  margin-left: 0 !important;
+}
+
+/* 消息气泡样式调整 */
+.message-bubble {
+  padding: 12px 16px;
+  border-radius: 18px;
+  word-break: break-word;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08);
+  line-height: 1.4;
+  max-width: 100%;
+}
+
+.sent .message-bubble {
+  background-color: #409eff !important;
+  color: white !important;
+  border-bottom-right-radius: 4px;
+  background-image: linear-gradient(135deg, #409eff 0%, #50b7ff 100%) !important;
+  float: right !important; /* 确保内容靠右 */
+}
+
+.received .message-bubble {
+  background-color: white !important;
+  color: #333 !important;
+  border-bottom-left-radius: 4px;
+  border: 1px solid #eaedf3 !important;
+  float: left !important; /* 确保内容靠左 */
+}
+
+/* 时间样式调整，确保正确跟随气泡位置 */
+.sent .message-time {
+  text-align: right !important;
+  padding-right: 8px;
+  clear: both;
+}
+
+.received .message-time {
+  text-align: left !important;
+  padding-left: 8px;
+  clear: both;
 }
 </style> 
