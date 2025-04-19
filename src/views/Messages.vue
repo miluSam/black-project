@@ -435,14 +435,35 @@ const checkForDirectMessage = async () => {
     console.log('检测到URL参数中的userId:', userId);
     
     // 查找是否已有与该用户的会话
-    const existingConversation = conversations.value.find(
-      conv => (conv.userId === userId || conv.otherUserId === userId)
-    );
+    // 确保转换为字符串进行比较，解决类型不匹配问题
+    const userIdStr = userId.toString();
+    
+    // 增强搜索逻辑，确保能找到已有会话
+    const existingConversation = conversations.value.find(conv => {
+      // 检查各种可能的ID字段
+      const convUserId = conv.userId ? conv.userId.toString() : '';
+      const convOtherUserId = conv.otherUserId ? conv.otherUserId.toString() : '';
+      
+      // 如果任一ID匹配，则认为是同一用户的会话
+      return convUserId === userIdStr || convOtherUserId === userIdStr;
+    });
     
     if (existingConversation) {
       // 如果已有会话，直接选择
       console.log('找到现有会话，选择此会话:', existingConversation);
-      selectConversation(existingConversation);
+      
+      // 激活chats标签页确保会话可见
+      activeTab.value = 'chats';
+      
+      // 选择会话并加载消息
+      await selectConversation(existingConversation);
+      
+      // 聚焦到输入框
+      nextTick(() => {
+        if (messageInputRef.value) {
+          messageInputRef.value.focus();
+        }
+      });
     } else {
       // 否则创建新会话
       console.log('未找到与用户的现有会话，创建新会话');
@@ -982,6 +1003,15 @@ const sendMessage = async () => {
                              response.data.data?.conversationId || 
                              null;
         
+        console.log('检测到临时会话发送消息成功，准备刷新页面');
+        
+        // 保存会话用户ID，确保一定有值
+        const targetUserId = selectedConversation.value.userId || 
+                           selectedConversation.value.otherUserId || 
+                           tempMessage.receiverId;
+        console.log('保存用户ID到localStorage:', targetUserId);
+        localStorage.setItem('lastMessageUserId', targetUserId);
+        
         if (conversationId) {
           console.log('获取到真实会话ID:', conversationId);
           // 更新会话ID
@@ -996,17 +1026,25 @@ const sendMessage = async () => {
             conversations.value[index].id = conversationId;
           }
           
-          // 保存会话用户ID和会话ID到localStorage，以便页面刷新后恢复
-          const targetUserId = selectedConversation.value.userId || selectedConversation.value.otherUserId;
-          localStorage.setItem('lastMessageUserId', targetUserId);
           localStorage.setItem('lastConversationId', conversationId);
-          
-          // 刷新页面
-          console.log('发送消息后刷新页面，将重新加载并聚焦会话...');
-          setTimeout(() => {
-            window.location.reload();
-          }, 300); // 短暂延迟确保数据保存完成
         }
+        
+        // 添加额外的刷新标记，确保刷新后能识别
+        localStorage.setItem('needsRefreshAfterSend', 'true');
+        localStorage.setItem('refreshTimestamp', Date.now().toString());
+        
+        console.log('准备刷新页面，已保存所有必要信息');
+        
+        // 直接强制刷新页面
+        try {
+          console.log('重发消息后强制刷新页面...');
+          window.location.href = window.location.pathname + '?refresh=' + Date.now();
+        } catch(e) {
+          console.error('刷新失败，尝试替代方法');
+          setTimeout(() => window.location.reload(true), 100);
+        }
+        
+        return; // 终止后续执行，因为页面即将刷新
       }
       
       // 在发送消息后更新未读消息数量，可能会收到新消息
@@ -1136,16 +1174,24 @@ const retryMessage = async (message) => {
           selectedConversation.value = newConversation;
           activeConversationId.value = newConversation.id;
           
-          // 保存会话用户ID和会话ID到localStorage，以便页面刷新后恢复
+          // 保存会话信息以便刷新后恢复
           const targetUserId = newConversation.userId || newConversation.otherUserId;
+          console.log('重发消息成功，保存会话信息:', { targetUserId, conversationId });
           localStorage.setItem('lastMessageUserId', targetUserId);
           localStorage.setItem('lastConversationId', conversationId);
+          localStorage.setItem('needsRefreshAfterSend', 'true');
+          localStorage.setItem('refreshTimestamp', Date.now().toString());
           
-          // 刷新页面
-          console.log('重发消息后刷新页面，将重新加载并聚焦会话...');
-          setTimeout(() => {
-            window.location.reload();
-          }, 300); // 短暂延迟确保数据保存完成
+          // 直接强制刷新页面
+          try {
+            console.log('重发消息后强制刷新页面...');
+            window.location.href = window.location.pathname + '?refresh=' + Date.now();
+          } catch(e) {
+            console.error('刷新失败，尝试替代方法');
+            setTimeout(() => window.location.reload(true), 100);
+          }
+          
+          return; // 终止后续执行，因为页面即将刷新
         }
       }
       
@@ -1316,7 +1362,24 @@ const createNewConversation = async (userId) => {
     throw new Error('无效的用户ID');
   }
   
-  console.log('正在创建新会话，用户ID:', userId);
+  console.log('准备创建新会话，用户ID:', userId);
+  
+  // 先检查是否已经存在与该用户的会话
+  const userIdStr = userId.toString();
+  const existingConversation = conversations.value.find(conv => {
+    const convUserId = conv.userId ? conv.userId.toString() : '';
+    const convOtherUserId = conv.otherUserId ? conv.otherUserId.toString() : '';
+    
+    return convUserId === userIdStr || convOtherUserId === userIdStr;
+  });
+  
+  if (existingConversation) {
+    console.log('已找到与该用户的现有会话，直接选择:', existingConversation);
+    await selectConversation(existingConversation);
+    return existingConversation;
+  }
+  
+  console.log('确认需要创建新会话，用户ID:', userId);
   
   try {
     // 先尝试通过API获取完整的用户信息
@@ -1597,62 +1660,113 @@ const startConversationWith = async (contact) => {
 
 // 在组件挂载后自动加载会话列表
 onMounted(async () => {
-  // 加载会话列表
-  await loadConversations();
-  
-  // 检查是否有从localStorage中恢复的会话
+  // 检查是否是由消息发送后的刷新
+  const needsRefresh = localStorage.getItem('needsRefreshAfterSend');
+  const refreshTimestamp = localStorage.getItem('refreshTimestamp');
   const lastUserId = localStorage.getItem('lastMessageUserId');
   const lastConversationId = localStorage.getItem('lastConversationId');
   
-  if (lastUserId || lastConversationId) {
-    console.log('检测到上次的会话信息，尝试恢复:', { lastUserId, lastConversationId });
+  console.log('组件挂载，检查刷新状态:', { 
+    needsRefresh, 
+    refreshTimestamp, 
+    lastUserId, 
+    lastConversationId,
+    currentTime: Date.now()
+  });
+  
+  // 加载会话列表
+  await loadConversations();
+  
+  // 如果是刷新后恢复会话，优先查找对应会话
+  if (needsRefresh === 'true' && (lastUserId || lastConversationId)) {
+    console.log('检测到页面刷新后需要恢复会话');
     
     // 延迟一下等会话列表加载完成
     setTimeout(async () => {
-      // 首先尝试通过会话ID查找
-      if (lastConversationId) {
-        const foundConversation = conversations.value.find(c => c.id.toString() === lastConversationId);
-        if (foundConversation) {
-          console.log('通过会话ID找到上次的会话:', foundConversation);
-          await selectConversation(foundConversation);
-          // 聚焦到输入框
-          if (messageInputRef.value) {
-            messageInputRef.value.focus();
-          }
-          // 清除localStorage中的临时数据
-          localStorage.removeItem('lastMessageUserId');
-          localStorage.removeItem('lastConversationId');
-          return;
-        }
-      }
-      
-      // 如果通过会话ID未找到，尝试通过用户ID查找
-      if (lastUserId) {
-        const foundConversation = conversations.value.find(
-          c => (c.userId === lastUserId || c.otherUserId === lastUserId)
-        );
-        
-        if (foundConversation) {
-          console.log('通过用户ID找到上次的会话:', foundConversation);
-          await selectConversation(foundConversation);
-          // 聚焦到输入框
-          if (messageInputRef.value) {
-            messageInputRef.value.focus();
-          }
-        } else {
-          // 如果找不到现有会话但有用户ID，创建新会话
-          console.log('未找到上次的会话，但有用户ID，创建新会话:', lastUserId);
-          const newConv = await createNewConversation(lastUserId);
-          if (messageInputRef.value) {
-            messageInputRef.value.focus();
+      try {
+        // 首先尝试通过会话ID查找
+        if (lastConversationId) {
+          console.log('尝试通过会话ID查找:', lastConversationId);
+          const foundConversation = conversations.value.find(c => 
+            c.id && c.id.toString() === lastConversationId.toString()
+          );
+          
+          if (foundConversation) {
+            console.log('通过会话ID找到上次的会话:', foundConversation);
+            await selectConversation(foundConversation);
+            // 聚焦到输入框
+            setTimeout(() => {
+              if (messageInputRef.value) {
+                console.log('聚焦到输入框');
+                messageInputRef.value.focus();
+              }
+            }, 300);
+            
+            // 清除所有localStorage中的临时数据
+            localStorage.removeItem('lastMessageUserId');
+            localStorage.removeItem('lastConversationId');
+            localStorage.removeItem('needsRefreshAfterSend');
+            localStorage.removeItem('refreshTimestamp');
+            return;
+          } else {
+            console.log('通过会话ID未找到会话');
           }
         }
         
-        // 清除localStorage中的临时数据
+        // 如果通过会话ID未找到，尝试通过用户ID查找
+        if (lastUserId) {
+          console.log('尝试通过用户ID查找:', lastUserId);
+          // 确保用户ID是字符串格式进行比较
+          const userId = lastUserId.toString();
+          
+          // 增强搜索已有会话的逻辑
+          const foundConversation = conversations.value.find(conv => {
+            // 检查所有可能的ID字段
+            const convUserId = conv.userId ? conv.userId.toString() : '';
+            const convOtherUserId = conv.otherUserId ? conv.otherUserId.toString() : '';
+            
+            // 如果任一ID匹配，则认为是同一用户的会话
+            return convUserId === userId || convOtherUserId === userId;
+          });
+          
+          if (foundConversation) {
+            console.log('通过用户ID找到会话:', foundConversation);
+            await selectConversation(foundConversation);
+            // 聚焦到输入框
+            setTimeout(() => {
+              if (messageInputRef.value) {
+                console.log('聚焦到输入框');
+                messageInputRef.value.focus();
+              }
+            }, 300);
+          } else {
+            // 如果找不到现有会话但有用户ID，创建新会话
+            console.log('未找到会话，创建新会话:', lastUserId);
+            try {
+              await createNewConversation(lastUserId);
+              setTimeout(() => {
+                if (messageInputRef.value) {
+                  messageInputRef.value.focus();
+                }
+              }, 300);
+            } catch (err) {
+              console.error('创建新会话失败:', err);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('恢复会话过程中出错:', error);
+      } finally {
+        // 无论如何都清除所有localStorage中的临时数据
         localStorage.removeItem('lastMessageUserId');
         localStorage.removeItem('lastConversationId');
+        localStorage.removeItem('needsRefreshAfterSend');
+        localStorage.removeItem('refreshTimestamp');
       }
     }, 500);
+  } else {
+    // 正常加载，检查URL参数是否有指定用户
+    console.log('常规页面加载，检查URL参数');
   }
 });
 
