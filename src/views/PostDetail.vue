@@ -11,8 +11,12 @@
             <img @click="goToUserProfile(post.user.id)" :src="post.user.imageUrl" alt="用户头像" class="avatar" style="cursor: pointer">
             <span @click="goToUserProfile(post.user.id)" class="username" style="cursor: pointer">{{ post.user.username }}</span>
           </div>
-          <h1>{{ post.title }}</h1>
-          <div class="post-content">{{ post.content }}</div>
+          <h1 class="post-title">{{ post.title }}</h1>
+          <div class="post-content">
+            <p v-for="(paragraph, index) in formatContent(post.content)" :key="index">
+              {{ paragraph }}
+            </p>
+          </div>
           
           <!-- 图片轮播部分修改为 -->
   <div class="image-carousel" v-if="post.imageUrl && post.imageUrl.length">
@@ -705,6 +709,15 @@ const sendComment = async () => {
       });
     };
 
+    // 格式化内容，将文本按段落分割并返回数组
+    const formatContent = (content) => {
+      if (!content) return [''];
+      // 按换行符分割文本
+      const paragraphs = content.split('\n').filter(p => p.trim() !== '');
+      // 如果没有段落（可能只有一行文本没有换行符），就将整个内容作为一个段落返回
+      return paragraphs.length > 0 ? paragraphs : [content];
+    };
+
     return { 
       post, 
       isLoading, 
@@ -735,7 +748,8 @@ const sendComment = async () => {
       submitMessage,
       authStore,
       recordPostView,
-      recordPostExit
+      recordPostExit,
+      formatContent
     };
   }
 });
@@ -809,8 +823,15 @@ main {
 }
 
 .post-content {
-  line-height: 1.6;
   margin-bottom: 20px;
+}
+
+.post-content p {
+  margin-bottom: 16px;
+  line-height: 1.8;
+  word-wrap: break-word; /* 允许长单词换行 */
+  overflow-wrap: break-word; /* 现代浏览器中确保长单词换行 */
+  white-space: pre-line; /* 保留换行符和空格 */
 }
 
 /* 用户信息样式 */
@@ -1375,5 +1396,26 @@ main {
 .send-btn:disabled {
   background: #a0cfff;
   cursor: not-allowed;
+}
+
+/* 修改标题和内容的样式 */
+.post-title {
+  font-size: 24px;
+  margin: 20px 0;
+  line-height: 1.4;
+  word-wrap: break-word; /* 允许长单词换行 */
+  overflow-wrap: break-word; /* 现代浏览器中确保长单词换行 */
+}
+
+.post-content {
+  margin-bottom: 20px;
+}
+
+.post-content p {
+  margin-bottom: 16px;
+  line-height: 1.8;
+  word-wrap: break-word; /* 允许长单词换行 */
+  overflow-wrap: break-word; /* 现代浏览器中确保长单词换行 */
+  white-space: pre-line; /* 保留换行符和空格 */
 }
 </style>
