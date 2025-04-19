@@ -66,8 +66,8 @@
               </div>
               <div class="post-content-container">
                 <div class="post-content">
-                  <h3 class="post-title">{{ post.title }}</h3>
-                  <p class="post-summary">{{ post.content }}</p>
+                  <h3 class="post-title">{{ truncateTitle(post.title) }}</h3>
+                  <p class="post-summary">{{ truncateContent(post.content) }}</p>
                 </div>
                 <div class="post-actions">
                   <button class="action-btn edit" @click.stop="editPost(post.id)">编辑</button>
@@ -945,6 +945,19 @@ export default defineComponent({
       return calculateContentScore(currentPostAnalytics.value);
     });
 
+    // --- 添加截断函数 ---
+    const truncateText = (text, maxLength) => {
+      if (!text) return '';
+      if (text.length <= maxLength) {
+        return text;
+      }
+      return text.slice(0, maxLength) + '...';
+    };
+
+    // 为标题和内容分别定义，方便理解
+    const truncateTitle = (title) => truncateText(title, 20);
+    const truncateContent = (content) => truncateText(content, 50);
+
     // 组件挂载时添加滚动控制
     onMounted(() => {
       // 获取用户帖子
@@ -1014,7 +1027,9 @@ export default defineComponent({
       handleChartMouseMove,
       hideTooltip,
       tooltip,
-      contentScore
+      contentScore,
+      truncateTitle,   // 暴露截断函数给模板
+      truncateContent, // 暴露截断函数给模板
     };
   }
 });
@@ -1302,11 +1317,7 @@ main {
   color: #666;
   margin: 0;
   line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  overflow: hidden; 
   text-overflow: ellipsis;
 }
 

@@ -15,35 +15,35 @@
           <h1 class="post-title">{{ post.title }}</h1>
           
           <!-- 图片轮播部分移动到标题和内容之间 -->
-          <div class="image-carousel" v-if="post.imageUrl && post.imageUrl.length">
-            <div class="carousel-container">
-              <button class="carousel-button left" @click="prevImage" :disabled="currentImageIndex === 0">
-                &lt;
-              </button>
-              
-              <div class="carousel-slide">
-                <transition-group name="slide-fade" tag="div" class="slide-wrapper">
-                  <img 
-                    v-for="(img, index) in post.imageUrl" 
-                    :key="index"
-                    :src="img" 
-                    alt="帖子图片"
-                    class="carousel-image"
-                    v-show="index === currentImageIndex"
-                  >
-                </transition-group>
-              </div>
-              
-              <button class="carousel-button right" @click="nextImage" :disabled="currentImageIndex === post.imageUrl.length - 1">
-                &gt;
-              </button>
-            </div>
-            <div class="carousel-indicator">
-              <span v-for="(img, index) in post.imageUrl" 
-                    :key="index" 
-                    :class="{ active: currentImageIndex === index }"
-                    @click="currentImageIndex = index"></span>
-            </div>
+  <div class="image-carousel" v-if="post.imageUrl && post.imageUrl.length">
+    <div class="carousel-container">
+      <button class="carousel-button left" @click="prevImage" :disabled="currentImageIndex === 0">
+        &lt;
+      </button>
+      
+      <div class="carousel-slide">
+        <transition-group name="slide-fade" tag="div" class="slide-wrapper">
+          <img 
+            v-for="(img, index) in post.imageUrl" 
+            :key="index"
+            :src="img" 
+            alt="帖子图片"
+            class="carousel-image"
+            v-show="index === currentImageIndex"
+          >
+        </transition-group>
+      </div>
+      
+      <button class="carousel-button right" @click="nextImage" :disabled="currentImageIndex === post.imageUrl.length - 1">
+        &gt;
+      </button>
+    </div>
+    <div class="carousel-indicator">
+      <span v-for="(img, index) in post.imageUrl" 
+            :key="index" 
+            :class="{ active: currentImageIndex === index }"
+            @click="currentImageIndex = index"></span>
+    </div>
           </div>
           
           <div class="post-content">
@@ -62,13 +62,13 @@
               <i class="comment-icon">💬</i>
               <span>{{ post.commentsCount }}</span>
             </div>
-          </div>
+  </div>
           
-          <!-- 评论区域 -->
-          <div class="comments-section">
-            <h3>评论 ({{ post.commentsCount }})</h3>
-            
-            <div v-for="comment in post.comments" :key="comment.id" class="comment">
+        <!-- 评论区域 -->
+  <div class="comments-section">
+    <h3>评论 ({{ post.commentsCount }})</h3>
+    
+    <div v-for="comment in post.comments" :key="comment.id" class="comment">
               <!-- 父评论区域 - 添加用户头像和用户名的右键菜单事件 -->
               <div class="comment-header" 
                    @contextmenu.prevent="showDeleteMenu($event, comment.id, comment.user?.id)">
@@ -84,22 +84,22 @@
                       style="cursor: pointer">
                   {{ comment.user?.username || '匿名用户' }}
                 </span>
-              </div>
+</div>
 
               <div class="comment-content" 
                    @click="setReplyContext(comment.id, comment.user?.id)"
                    @contextmenu.prevent="showDeleteMenu($event, comment.id, comment.user?.id)" 
                    style="cursor: pointer; position: relative;">
-                <p>{{ comment.commentText }}</p>
-                <span class="comment-date">{{ formatDate(comment.commentDate) }}</span>
-              </div>
-              
+        <p>{{ comment.commentText }}</p>
+        <span class="comment-date">{{ formatDate(comment.commentDate) }}</span>
+      </div>
+      
               <!-- 子评论部分 - 添加用户头像和用户名的右键菜单事件 -->
-              <!-- 修改后的子评论部分 -->
-              <div v-if="comment.childComments && comment.childComments.length" class="replies-container">
-                <div v-for="reply in comment.childComments" 
-                     :key="reply.id" 
-                     class="reply"
+   <!-- 修改后的子评论部分 -->
+<div v-if="comment.childComments && comment.childComments.length" class="replies-container">
+  <div v-for="reply in comment.childComments" 
+       :key="reply.id" 
+       class="reply"
                      @click="setReplyContext(comment.id, reply.user?.id)"
                      @contextmenu.prevent="showDeleteMenu($event, reply.id, reply.user?.id)">
                   <span class="reply-username" 
@@ -108,20 +108,20 @@
                         style="cursor: pointer">
                     {{ reply.user?.username || '匿名用户' }}
                   </span>
-                  <template v-if="reply.replyToUser">
-                    <span class="reply-to-text">回复</span>
+    <template v-if="reply.replyToUser">
+      <span class="reply-to-text">回复</span>
                     <span class="reply-target" 
                           @click.stop="goToUserProfile(reply.replyToUser?.id)" 
                           @contextmenu.prevent.stop="showUserMenu($event, reply.replyToUser?.id)"
                           style="cursor: pointer">
                       @{{ reply.replyToUser.username }}
                     </span>
-                  </template>
-                  <span class="reply-content">: {{ reply.commentText }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
+    </template>
+    <span class="reply-content">: {{ reply.commentText }}</span>
+  </div>
+</div>
+    </div>
+  </div>
         </div>
         <div v-else class="loading">加载中...</div>
       </div>
@@ -151,8 +151,8 @@
       <div v-if="contextMenu.type === 'user'" class="menu-item" @click="goToUserProfile(contextMenu.userId)">
         <i class="el-icon-user"></i> 查看主页
       </div>
-    </div>
-    
+  </div>
+  
     <!-- 私信弹窗 -->
     <div v-if="showMessageDialog" class="message-dialog-overlay">
       <div class="message-dialog">
@@ -194,9 +194,9 @@ export default defineComponent({
     const authStore = useAuthStore();
     const isLiked = ref(false);
     const replyContext = ref({
-      parentCommentId: null,
-      replyToUserId: null
-    });
+  parentCommentId: null,
+  replyToUserId: null
+});
     
     // 添加上下文菜单状态
     const contextMenu = ref({
@@ -329,14 +329,14 @@ export default defineComponent({
     });
 
     const checkAndRefreshToken = async () => {
-      const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-      if (!jwtToken) {
-        authStore.logout();
-        ElMessage.error('登录已过期，请重新登录');
-        return false;
-      }
-      return true;
-    };
+  const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+  if (!jwtToken) {
+    authStore.logout();
+    ElMessage.error('登录已过期，请重新登录');
+    return false;
+  }
+  return true;
+};
     const fetchPostDetail = async () => {
       isLoading.value = true; // 开始加载
       error.value = null;    // 清除旧错误
@@ -384,77 +384,77 @@ export default defineComponent({
     };
     
     const fetchComments = async () => {
-      try {
-        const response = await axios.get(`/api/post-detail/${post.value.id}`);
-        comments.value = response.data.comments || [];
-      } catch (error) {
-        console.error('获取评论失败:', error);
-        ElMessage.error('获取评论失败');
-      }
-    };
+  try {
+    const response = await axios.get(`/api/post-detail/${post.value.id}`);
+    comments.value = response.data.comments || [];
+  } catch (error) {
+    console.error('获取评论失败:', error);
+    ElMessage.error('获取评论失败');
+  }
+};
 
     const nextImage = () => {
-      transitionName.value = 'slide-next';
-      if (currentImageIndex.value < post.value.imageUrl.length - 1) {
-        currentImageIndex.value++;
-      }
+  transitionName.value = 'slide-next';
+  if (currentImageIndex.value < post.value.imageUrl.length - 1) {
+    currentImageIndex.value++;
+  }
+};
+
+const prevImage = () => {
+  transitionName.value = 'slide-prev';
+  if (currentImageIndex.value > 0) {
+    currentImageIndex.value--;
+  }
+};
+    
+const sendComment = async () => {
+  console.log("即将发送评论请求",  newComment.value);
+  try {
+    // 确保重新从storage获取最新状态
+    authStore.initializeFromStorage();
+    
+    if (!authStore.isLoggedIn) {
+      ElMessage.error('请先登录');
+      return;
+    }
+    
+    if (!newComment.value.trim()) {
+      ElMessage.error('评论内容不能为空');
+      return;
+    }
+    
+    const commentData = {
+      postId: post.value.id,
+      commentText: newComment.value,
+      userId: authStore.userInfo.id,
+      parentCommentId: replyContext.value.parentCommentId,
+      replyToUserId: replyContext.value.replyToUserId
     };
 
-    const prevImage = () => {
-      transitionName.value = 'slide-prev';
-      if (currentImageIndex.value > 0) {
-        currentImageIndex.value--;
+    const response = await axios.post('/api/comments/add', commentData, {
+      headers: {
+        Authorization: `Bearer ${authStore.userInfo.token}`
       }
-    };
+    });
 
-    const sendComment = async () => {
-      console.log("即将发送评论请求",  newComment.value);
-      try {
-        // 确保重新从storage获取最新状态
-        authStore.initializeFromStorage();
-        
-        if (!authStore.isLoggedIn) {
-          ElMessage.error('请先登录');
-          return;
-        }
-        
-        if (!newComment.value.trim()) {
-          ElMessage.error('评论内容不能为空');
-          return;
-        }
-        
-        const commentData = {
-          postId: post.value.id,
-          commentText: newComment.value,
-          userId: authStore.userInfo.id,
-          parentCommentId: replyContext.value.parentCommentId,
-          replyToUserId: replyContext.value.replyToUserId
-        };
-
-        const response = await axios.post('/api/comments/add', commentData, {
-          headers: {
-            Authorization: `Bearer ${authStore.userInfo.token}`
-          }
-        });
-
-        if (response.data.code === 200) {
-          ElMessage.success('评论成功');
-          newComment.value = '';
-          replyContext.value = { parentCommentId: null, replyToUserId: null };
-          await fetchPostDetail();
-        } else {
-          ElMessage.error(response.data.message || '评论失败');
-        }
-      } catch (error) {
-        console.error('评论失败:', error);
-        if (error.response?.status === 401) {
-          ElMessage.error('登录已过期，请重新登录');
-          return;
-        } else {
-          ElMessage.error(error.response?.data?.message || '评论失败');
-        }
-      }
-    };
+    if (response.data.code === 200) {
+      ElMessage.success('评论成功');
+      newComment.value = '';
+      replyContext.value = { parentCommentId: null, replyToUserId: null };
+      await fetchPostDetail();
+    } else {
+      ElMessage.error(response.data.message || '评论失败');
+    }
+  } catch (error) {
+    console.error('评论失败:', error);
+    if (error.response?.status === 401) {
+  ElMessage.error('登录已过期，请重新登录');
+  return;
+} else {
+      ElMessage.error(error.response?.data?.message || '评论失败');
+    }
+  }
+};
     
     const formatDate = (dateStr) => {
       const options = { year: 'numeric', month: 'long', day: 'numeric' };
