@@ -138,32 +138,59 @@
               <h4>浏览量趋势</h4>
               <div class="chart-container">
                 <div class="chart-y-axis">
-                  <div v-for="(value, index) in 5" :key="index" class="y-axis-label">
-                    {{ 200 - index * 50 }}
+                  <div v-for="(value, index) in viewsYAxisValues" :key="index" class="y-axis-label">
+                    {{ value }}
                   </div>
                 </div>
-                <div class="chart-area">
+                <div class="chart-area" 
+                     @mousemove="handleChartMouseMove($event, viewsChartData.data, viewsChartData.labels, '浏览量')" 
+                     @mouseleave="hideTooltip">
                   <div class="chart-line" :style="{ height: '200px' }">
-                    <div 
-                      v-for="(value, index) in viewsChartData.data" 
-                      :key="index" 
-                      class="chart-bar"
-                      :style="{ 
-                        height: `${Math.min(value * 4, 200)}px`,
-                        left: `${index * (100 / viewsChartData.data.length)}%`
-                      }"
+                    <!-- 折线图 -->
+                    <svg width="100%" height="200" viewBox="0 0 1000 200" preserveAspectRatio="none">
+                      <polyline 
+                        :points="generateChartPoints(viewsChartData.data)" 
+                        fill="none" 
+                        stroke="#409EFF" 
+                        stroke-width="2"
+                      />
+                    </svg>
+                    
+                    <!-- 数据点标记 -->
+                    <div v-for="(value, index) in viewsChartData.data" 
+                         :key="index" 
+                         class="data-point"
+                         :class="{ 'active-point': tooltip.visible && tooltip.chartType === '浏览量' && tooltip.activePointIndex === index }"
+                         :style="{ 
+                           left: `${index * (100 / 6)}%`, 
+                           bottom: `${viewsYAxisValues[0] === 0 ? 0 : (value / viewsYAxisValues[0]) * 200}px`
+                         }"
                     ></div>
+                    
+                    <!-- 鼠标悬浮参考线 -->
+                    <div v-if="tooltip.visible && tooltip.chartType === '浏览量'" 
+                         class="hover-line" 
+                         :style="{ left: `${tooltip.position.x}px` }"></div>
                   </div>
                   <div class="chart-x-axis">
-                    <div 
-                      v-for="(label, index) in viewsChartData.labels"
-                      :key="index"
-                      class="x-axis-label"
-                      :style="{ left: `${index * (100 / viewsChartData.labels.length)}%` }"
-                      v-show="index % 5 === 0"
-                    >
+                    <div v-for="(label, index) in viewsChartData.labels" 
+                         :key="index" 
+                         class="x-axis-label" 
+                         :style="{ left: `${index * (100 / 6)}%` }">
                       {{ label }}
                     </div>
+                  </div>
+                  
+                  <!-- 悬浮提示框 -->
+                  <div v-if="tooltip.visible && tooltip.chartType === '浏览量'" 
+                       class="chart-tooltip"
+                       :style="{ 
+                         left: `${tooltip.absolutePosition.x + 10}px`, 
+                         top: `${tooltip.absolutePosition.y - 40}px` 
+                       }">
+                    <div class="tooltip-title">{{ tooltip.chartType }}</div>
+                    <div class="tooltip-value">{{ tooltip.value }}</div>
+                    <div class="tooltip-date">{{ tooltip.date }}</div>
                   </div>
                 </div>
               </div>
@@ -216,34 +243,64 @@
               <!-- 互动趋势图 -->
               <div class="interaction-chart-container">
                 <div class="chart-y-axis">
-                  <div v-for="i in 5" :key="i" class="y-axis-label">
-                    {{ (i - 1) * 0.3 }}
+                  <div v-for="(value, index) in interactionYAxisValues" :key="index" class="y-axis-label">
+                    {{ value }}
                   </div>
                 </div>
-                <div class="chart-area">
+                <div class="chart-area"
+                     @mousemove="handleChartMouseMove($event, interactionChartData.data, interactionChartData.labels, '互动量')" 
+                     @mouseleave="hideTooltip">
                   <div class="trend-line-chart">
-                    <svg v-if="viewsChartData && viewsChartData.data && viewsChartData.data.length > 0" 
-                         width="100%" height="200" viewBox="0 0 1000 200" preserveAspectRatio="none">
-                      <!-- 动态生成折线，使用后端返回的数据 -->
+                    <svg width="100%" height="200" viewBox="0 0 1000 200" preserveAspectRatio="none">
+                      <!-- 动态生成折线，使用后端返回的互动数据 -->
                       <polyline 
-                        :points="generateChartPoints(viewsChartData.data)" 
+                        :points="generateChartPoints(interactionChartData.data)" 
                         fill="none" 
                         stroke="#409EFF" 
                         stroke-width="2"
                       />
                     </svg>
+                    
+                    <!-- 数据点标记 -->
+                    <div v-for="(value, index) in interactionChartData.data" 
+                         :key="index" 
+                         class="data-point"
+                         :class="{ 'active-point': tooltip.visible && tooltip.chartType === '互动量' && tooltip.activePointIndex === index }"
+                         :style="{ 
+                           left: `${index * (100 / 6)}%`, 
+                           bottom: `${interactionYAxisValues[0] === 0 ? 0 : (value / interactionYAxisValues[0]) * 200}px`
+                         }"
+                    ></div>
+                    
+                    <!-- 鼠标悬浮参考线 -->
+                    <div v-if="tooltip.visible && tooltip.chartType === '互动量'" 
+                         class="hover-line" 
+                         :style="{ left: `${tooltip.position.x}px` }"></div>
+                    
                     <!-- 网格线 -->
                     <div class="grid-lines">
                       <div v-for="i in 4" :key="i" class="grid-line" :style="{bottom: `${i * 25}%`}"></div>
                     </div>
                   </div>
                   <div class="chart-x-axis">
-                    <div v-for="(date, index) in viewsChartData.labels" :key="index" 
-                         class="date-label" 
-                         :style="{left: `${index * (100 / (viewsChartData.labels.length - 1))}%`}"
-                         v-show="index % 5 === 0 || index === viewsChartData.labels.length - 1">
+                    <div v-for="(date, index) in interactionChartData.labels" 
+                         :key="index" 
+                         class="x-axis-label" 
+                         :style="{left: `${index * (100 / 6)}%`}">
                       {{ date }}
                     </div>
+                  </div>
+                  
+                  <!-- 悬浮提示框 -->
+                  <div v-if="tooltip.visible && tooltip.chartType === '互动量'" 
+                       class="chart-tooltip"
+                       :style="{ 
+                         left: `${tooltip.absolutePosition.x + 10}px`, 
+                         top: `${tooltip.absolutePosition.y - 40}px` 
+                       }">
+                    <div class="tooltip-title">{{ tooltip.chartType }}</div>
+                    <div class="tooltip-value">{{ tooltip.value }}</div>
+                    <div class="tooltip-date">{{ tooltip.date }}</div>
                   </div>
                 </div>
               </div>
@@ -264,30 +321,64 @@
               <!-- 粉丝趋势图 -->
               <div class="interaction-chart-container">
                 <div class="chart-y-axis">
-                  <div v-for="i in 5" :key="i" class="y-axis-label">
-                    {{ (i - 1) * 0.3 }}
+                  <div v-for="(value, index) in fansYAxisValues" :key="index" class="y-axis-label">
+                    {{ value }}
                   </div>
                 </div>
-                <div class="chart-area">
+                <div class="chart-area"
+                     @mousemove="handleChartMouseMove($event, fansChartData.data, fansChartData.labels, '新增粉丝')" 
+                     @mouseleave="hideTooltip">
                   <div class="trend-line-chart">
                     <svg width="100%" height="200" viewBox="0 0 1000 200" preserveAspectRatio="none">
-                      <!-- 示例折线，真实数据应从API获取 -->
+                      <!-- 动态生成折线，使用后端返回的粉丝数据 -->
                       <polyline 
-                        points="0,200 100,200 200,200 300,200 400,200 500,200 600,200 700,200 800,200 900,200 1000,200" 
+                        :points="generateChartPoints(fansChartData.data)" 
                         fill="none" 
                         stroke="#409EFF" 
                         stroke-width="2"
                       />
                     </svg>
+                    
+                    <!-- 数据点标记 -->
+                    <div v-for="(value, index) in fansChartData.data" 
+                         :key="index" 
+                         class="data-point"
+                         :class="{ 'active-point': tooltip.visible && tooltip.chartType === '新增粉丝' && tooltip.activePointIndex === index }"
+                         :style="{ 
+                           left: `${index * (100 / 6)}%`, 
+                           bottom: `${fansYAxisValues[0] === 0 ? 0 : (value / fansYAxisValues[0]) * 200}px`
+                         }"
+                    ></div>
+                    
+                    <!-- 鼠标悬浮参考线 -->
+                    <div v-if="tooltip.visible && tooltip.chartType === '新增粉丝'" 
+                         class="hover-line" 
+                         :style="{ left: `${tooltip.position.x}px` }"></div>
+                    
                     <!-- 网格线 -->
                     <div class="grid-lines">
                       <div v-for="i in 4" :key="i" class="grid-line" :style="{bottom: `${i * 25}%`}"></div>
                     </div>
                   </div>
                   <div class="chart-x-axis">
-                    <div v-for="(date, index) in ['02.09', '02.17', '02.25', '03.05', '03.13', '03.21', '03.29', '04.06', '04.14']" :key="index" class="date-label" :style="{left: `${index * 12.5}%`}">
+                    <div v-for="(date, index) in fansChartData.labels" 
+                         :key="index" 
+                         class="x-axis-label" 
+                         :style="{left: `${index * (100 / 6)}%`}">
                       {{ date }}
                     </div>
+                  </div>
+                  
+                  <!-- 悬浮提示框 -->
+                  <div v-if="tooltip.visible && tooltip.chartType === '新增粉丝'" 
+                       class="chart-tooltip"
+                       :style="{ 
+                         left: `${tooltip.absolutePosition.x + 10}px`, 
+                         top: `${tooltip.absolutePosition.y - 40}px` 
+                       }">
+                    <div class="tooltip-title">{{ tooltip.chartType }}</div>
+                    <div class="tooltip-value">{{ tooltip.value }}</div>
+                    <div class="tooltip-date">{{ tooltip.date }}</div>
                   </div>
                 </div>
               </div>
@@ -300,7 +391,7 @@
 </template>
 
 <script>
-import { defineComponent, ref, onMounted, onBeforeUnmount} from 'vue';
+import { defineComponent, ref, onMounted, onBeforeUnmount, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import axios from 'axios';
@@ -331,11 +422,86 @@ export default defineComponent({
     const currentPostAnalytics = ref(null);
     const analyticsLoading = ref(false);
     
-    // 模拟图表数据
+    // 图表数据
     const viewsChartData = ref({
       labels: [],
       data: []
     });
+    
+    // 添加互动趋势图和粉丝趋势图的数据引用
+    const interactionChartData = ref({
+      labels: [],
+      data: []
+    });
+    
+    const fansChartData = ref({
+      labels: [],
+      data: []
+    });
+    
+    // 图表提示框状态
+    const tooltip = ref({
+      visible: false,
+      position: { x: 0, y: 0 },
+      absolutePosition: { x: 0, y: 0 },
+      value: 0,
+      date: '',
+      chartType: '',
+      activePointIndex: -1 // 新增：当前活跃点的索引
+    });
+    
+    // 处理图表鼠标移动事件
+    const handleChartMouseMove = (event, dataArray, labels, chartType) => {
+      const chartArea = event.currentTarget;
+      const rect = chartArea.getBoundingClientRect();
+      const offsetX = event.clientX - rect.left;
+      const chartWidth = rect.width;
+      
+      // 计算鼠标与每个数据点的距离，选择最近的点
+      let closestIndex = 0;
+      let minDistance = Infinity;
+      
+      for (let i = 0; i < dataArray.length; i++) {
+        const pointX = (i / 6) * chartWidth;
+        const distance = Math.abs(offsetX - pointX);
+        
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestIndex = i;
+        }
+      }
+      
+      // 计算最近点在图表中的x坐标（相对于图表容器）
+      const pointX = (closestIndex / 6) * chartWidth;
+      
+      // 计算绝对位置（用于提示框）
+      const absoluteX = rect.left + pointX;
+      const absoluteY = event.clientY;
+      
+      // 更新提示框位置和内容
+      tooltip.value = {
+        visible: true,
+        // 相对位置（用于参考线）
+        position: {
+          x: pointX,
+          y: event.clientY - rect.top
+        },
+        // 绝对位置（用于提示框）
+        absolutePosition: {
+          x: absoluteX,
+          y: absoluteY
+        },
+        value: dataArray[closestIndex] || 0,
+        date: labels[closestIndex] || '',
+        chartType: chartType,
+        activePointIndex: closestIndex // 记录当前活跃点索引
+      };
+    };
+    
+    // 隐藏提示框
+    const hideTooltip = () => {
+      tooltip.value.visible = false;
+    };
 
     // 获取用户帖子列表
     const fetchUserPosts = async (reset = true) => {
@@ -427,16 +593,105 @@ export default defineComponent({
           newFans: analyticsData.newFans || 0
         };
         
-        // 设置图表数据
-        if (analyticsData.viewsData) {
-          viewsChartData.value = analyticsData.viewsData;
-        } else {
-          // 后备方案：如果API未返回图表数据，则设置空数据
-          viewsChartData.value = {
-            labels: [],
-            data: []
-          };
-        }
+        // 确保数据是一周的完整视图
+        const processChartData = (chartData) => {
+          if (!chartData || !chartData.labels || !chartData.data) {
+            return { labels: generateWeekLabels(), data: [0, 0, 0, 0, 0, 0, 0] };
+          }
+          
+          // 如果只有一个数据点，扩展为一周数据
+          if (chartData.labels.length === 1) {
+            const weekLabels = generateWeekLabels(chartData.labels[0]);
+            const weekData = Array(7).fill(0);
+            // 将唯一数据点放在正确的位置
+            const dayIndex = getDayIndex(chartData.labels[0]);
+            if (dayIndex >= 0 && dayIndex < 7) {
+              weekData[dayIndex] = chartData.data[0];
+            }
+            return { labels: weekLabels, data: weekData };
+          }
+          
+          // 如果数据点少于7个，补全为一周
+          if (chartData.labels.length < 7) {
+            const weekLabels = generateWeekLabels();
+            const weekData = Array(7).fill(0);
+            
+            // 将现有数据点填充到对应位置
+            chartData.labels.forEach((label, index) => {
+              const dayIndex = getDayIndex(label);
+              if (dayIndex >= 0 && dayIndex < 7) {
+                weekData[dayIndex] = chartData.data[index];
+              }
+            });
+            
+            return { labels: weekLabels, data: weekData };
+          }
+          
+          return chartData;
+        };
+        
+        // 生成一周的日期标签（格式：MM.DD），以当天为最后一天
+        const generateWeekLabels = (referenceDate) => {
+          const result = [];
+          // 参考日期或今天
+          const today = referenceDate ? new Date(parseChineseDate(referenceDate)) : new Date();
+          
+          // 生成过去七天的日期标签（包括今天）
+          for (let i = 6; i >= 0; i--) {
+            const date = new Date(today);
+            date.setDate(today.getDate() - i); // 减去天数，6天前到今天
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            result.push(`${month}.${day}`);
+          }
+          
+          return result;
+        };
+        
+        // 解析中文日期格式（MM.DD）到日期对象
+        const parseChineseDate = (dateStr) => {
+          if (!dateStr || typeof dateStr !== 'string') return new Date();
+          
+          const parts = dateStr.split('.');
+          if (parts.length !== 2) return new Date();
+          
+          const month = parseInt(parts[0], 10) - 1; // 月份从0开始
+          const day = parseInt(parts[1], 10);
+          
+          const result = new Date();
+          result.setMonth(month);
+          result.setDate(day);
+          
+          return result;
+        };
+        
+        // 获取日期标签在过去一周中的索引（0-6，对应6天前到今天）
+        const getDayIndex = (dateLabel) => {
+          if (!dateLabel) return -1;
+          
+          const date = parseChineseDate(dateLabel);
+          const today = new Date();
+          
+          // 重置时分秒，只比较日期部分
+          today.setHours(0, 0, 0, 0);
+          date.setHours(0, 0, 0, 0);
+          
+          // 计算与今天的天数差
+          const diffTime = today.getTime() - date.getTime();
+          const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+          
+          // 如果在过去7天内，返回对应索引（0是6天前，6是今天）
+          if (diffDays >= 0 && diffDays <= 6) {
+            return 6 - diffDays; // 转换为数组索引
+          }
+          
+          return -1; // 不在过去一周内
+        };
+        
+        // 处理各个图表的数据
+        viewsChartData.value = processChartData(analyticsData.viewsData);
+        interactionChartData.value = processChartData(analyticsData.interactionData);
+        fansChartData.value = processChartData(analyticsData.fansData);
         
         // 显示分析面板
         showAnalytics.value = true;
@@ -530,27 +785,103 @@ export default defineComponent({
       }
     };
 
+    // 计算Y轴刻度值
+    const calculateYAxisValues = (dataArray, tickCount = 5) => {
+      if (!dataArray || dataArray.length === 0) return [1, 0.75, 0.5, 0.25, 0];
+      
+      const maxValue = Math.max(...dataArray);
+      
+      // 如果所有数据都是0，返回一个从0到1的刻度
+      if (maxValue === 0) return [1, 0.75, 0.5, 0.25, 0];
+      
+      // 计算合适的最大刻度值（略大于最大数据值，更易读）
+      let niceMaxValue;
+      
+      // 如果最大值小于10，使用较小的舍入增量
+      if (maxValue < 10) {
+        niceMaxValue = Math.ceil(maxValue * 2) / 2; // 舍入到0.5的倍数
+      } else if (maxValue < 100) {
+        niceMaxValue = Math.ceil(maxValue / 5) * 5; // 舍入到5的倍数
+      } else {
+        niceMaxValue = Math.ceil(maxValue / 10) * 10; // 舍入到10的倍数
+      }
+      
+      // 确保最大值比实际数据的最大值至少大10-20%
+      const buffer = Math.max(1, Math.ceil(niceMaxValue * 0.2));
+      niceMaxValue += buffer;
+      
+      // 生成均匀分布的刻度数组（从大到小）
+      const result = [];
+      for (let i = 0; i < tickCount; i++) {
+        // 使用浮点数避免舍入导致的重复值
+        const value = niceMaxValue - (i * (niceMaxValue / (tickCount - 1)));
+        
+        // 根据值的大小决定保留的小数位数
+        let formattedValue;
+        if (niceMaxValue >= 100) {
+          formattedValue = Math.round(value); // 大数值只保留整数
+        } else if (niceMaxValue >= 10) {
+          formattedValue = Math.round(value * 10) / 10; // 中等数值保留一位小数
+        } else {
+          formattedValue = Math.round(value * 100) / 100; // 小数值保留两位小数
+        }
+        
+        // 防止添加重复值（与前一个值比较）
+        if (i === 0 || formattedValue !== result[result.length - 1]) {
+          result.push(formattedValue);
+        } else {
+          // 如果发生重复，微调当前值
+          result.push(formattedValue + (niceMaxValue >= 10 ? 0.1 : 0.01));
+        }
+      }
+      
+      return result;
+    };
+    
     // 生成图表点坐标
     const generateChartPoints = (dataArray) => {
       if (!dataArray || dataArray.length === 0) return '';
       
-      // 找出数据中的最大值，用于缩放
+      // 计算Y轴的最大刻度值（与Y轴刻度计算保持一致）
       const maxValue = Math.max(...dataArray);
+      let yAxisMaxValue;
       
-      // 生成点坐标
+      if (maxValue === 0) {
+        yAxisMaxValue = 1; // 如果数据全为0，使用1作为最大刻度
+      } else {
+        // 使用与calculateYAxisValues相同的逻辑计算最大刻度
+        if (maxValue < 10) {
+          yAxisMaxValue = Math.ceil(maxValue * 2) / 2;
+        } else if (maxValue < 100) {
+          yAxisMaxValue = Math.ceil(maxValue / 5) * 5;
+        } else {
+          yAxisMaxValue = Math.ceil(maxValue / 10) * 10;
+        }
+        
+        // 添加缓冲区
+        const buffer = Math.max(1, Math.ceil(yAxisMaxValue * 0.2));
+        yAxisMaxValue += buffer;
+      }
+      
+      // 生成点坐标，使用yAxisMaxValue而不是maxValue来确保与Y轴刻度一致
       const points = dataArray.map((value, index) => {
         // 横坐标：根据索引平均分布
-        const x = (index / (dataArray.length - 1)) * 1000;
+        const x = (index / (dataArray.length - 1 || 1)) * 1000;
         
         // 纵坐标：将值映射到0-200的范围，0是最大值(顶部)，200是最小值(底部)
-        // 如果最大值为0，则所有点都在底部
-        const y = maxValue === 0 ? 200 : 200 - (value / maxValue) * 200;
+        // 使用yAxisMaxValue作为缩放基准
+        const y = 200 - (value / yAxisMaxValue) * 200;
         
         return `${x},${y}`;
       }).join(' ');
       
       return points;
     };
+
+    // 计算不同图表的Y轴刻度
+    const viewsYAxisValues = computed(() => calculateYAxisValues(viewsChartData.value.data));
+    const interactionYAxisValues = computed(() => calculateYAxisValues(interactionChartData.value.data));
+    const fansYAxisValues = computed(() => calculateYAxisValues(fansChartData.value.data));
 
     // 组件挂载时添加滚动控制
     onMounted(() => {
@@ -611,7 +942,16 @@ export default defineComponent({
       analyticsLoading,
       closeAnalytics,
       viewsChartData,
-      generateChartPoints
+      generateChartPoints,
+      interactionChartData,
+      fansChartData,
+      viewsYAxisValues,
+      interactionYAxisValues,
+      fansYAxisValues,
+      calculateYAxisValues,
+      handleChartMouseMove,
+      hideTooltip,
+      tooltip
     };
   }
 });
@@ -747,7 +1087,7 @@ main {
   border-radius: 8px;
   padding: 20px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
-  margin-top: 280px; /* 为顶部固定的内容区域留出空间 */
+  margin-top: 130px; /* 为顶部固定的内容区域留出空间 */
   height: calc(100vh - 295px); /* 设置固定高度 */
   overflow-y: auto; /* 允许垂直滚动 */
   scrollbar-width: none; /* Firefox 隐藏滚动条 */
@@ -788,6 +1128,7 @@ main {
   margin-bottom: 15px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   transition: all 0.3s;
+  cursor: pointer;
 }
 
 .post-item:hover {
@@ -886,7 +1227,7 @@ main {
   font-weight: 600;
   margin: 0 0 10px 0;
   color: #333;
-  cursor: pointer;
+  cursor: text;
 }
 
 .post-title:hover {
@@ -986,7 +1327,7 @@ main {
   padding: 20px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
   margin-top: 130px;
-  height: calc(100vh - 190px);
+  height: calc(100vh - 295px);
   overflow-y: auto;
 }
 
@@ -1136,23 +1477,16 @@ main {
   flex: 1;
   position: relative;
   padding-top: 10px;
+  cursor: pointer;
 }
 
 .chart-line {
   position: relative;
   width: 100%;
+  height: 200px;
   background-image: linear-gradient(to bottom, #f0f0f0 1px, transparent 1px);
   background-size: 100% 50px;
   border-bottom: 1px solid #e0e0e0;
-}
-
-.chart-bar {
-  position: absolute;
-  bottom: 0;
-  width: 3px;
-  background-color: #409EFF;
-  border-radius: 3px 3px 0 0;
-  transition: height 0.3s;
 }
 
 .chart-x-axis {
@@ -1165,21 +1499,81 @@ main {
   position: absolute;
   font-size: 11px;
   color: #999;
-  transform: translateX(-50%) rotate(45deg);
-  transform-origin: top left;
+  transform: translateX(-50%);
   white-space: nowrap;
 }
 
-/* 增加指针样式，表示可点击 */
-.post-item {
+/* 数据点样式 */
+.data-point {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background-color: #409EFF;
+  border-radius: 50%;
+  transform: translate(-50%, 50%); /* 居中对齐 */
+  z-index: 2;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.data-point:hover {
+  transform: translate(-50%, 50%) scale(1.5);
+  box-shadow: 0 0 5px rgba(64, 158, 255, 0.8);
   cursor: pointer;
 }
 
-.post-title {
-  cursor: text;
+/* 当前活跃的数据点 */
+.active-point {
+  transform: translate(-50%, 50%) scale(1.5);
+  box-shadow: 0 0 8px rgba(64, 158, 255, 1);
+  background-color: #fff;
+  border: 2px solid #409EFF;
 }
 
-/* 互动数据样式 */
+/* 鼠标悬浮参考线 */
+.hover-line {
+  position: absolute;
+  height: 100%;
+  width: 1px;
+  background-color: rgba(64, 158, 255, 0.5);
+  bottom: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 提示框样式 */
+.chart-tooltip {
+  position: fixed; /* 改为fixed定位，使其可以超出父容器 */
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 1000; /* 提高z-index确保显示在最上层 */
+  min-width: 80px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(2px);
+}
+
+.tooltip-title {
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.tooltip-value {
+  font-size: 14px;
+  color: #409EFF;
+  font-weight: bold;
+}
+
+.tooltip-date {
+  margin-top: 2px;
+  color: #ccc;
+  font-size: 11px;
+}
+
+/* 互动数据样式 - 恢复原始样式 */
 .interaction-stats {
   display: flex;
   flex-wrap: wrap;
@@ -1210,7 +1604,16 @@ main {
   color: #333;
 }
 
-/* 互动趋势图样式 */
+/* 增加指针样式，表示可点击 */
+.post-item {
+  cursor: pointer;
+}
+
+.post-title {
+  cursor: text;
+}
+
+/* 互动趋势图和粉丝趋势图样式 */
 .interaction-chart-container {
   margin-top: 20px;
   display: flex;
@@ -1241,22 +1644,6 @@ main {
   width: 100%;
   height: 1px;
   background-color: #eee;
-}
-
-.chart-x-axis {
-  height: 30px;
-  position: absolute;
-  bottom: -30px;
-  left: 40px;
-  right: 0;
-}
-
-.date-label {
-  position: absolute;
-  font-size: 11px;
-  color: #999;
-  transform: translateX(-50%);
-  white-space: nowrap;
 }
 
 svg polyline {
