@@ -620,7 +620,14 @@ const selectConversation = async (conversation) => {
   if (!isTemporaryChat && conversation.unreadCount > 0) {
     try {
       const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-      await axios.put(`http://localhost:7070/api/messages/conversations/${conversation.id}/read`, {}, {
+      // --- 修改开始: 使用对方用户ID ---
+      const otherUserId = conversation.userId || conversation.otherUserId; 
+      if (!otherUserId) {
+        console.error('标记会话已读失败：无法确定对方用户ID', conversation);
+        return; 
+      }
+      await axios.put(`http://localhost:7070/api/messages/conversations/${otherUserId}/read`, {}, {
+      // --- 修改结束 ---
         headers: {
           'Authorization': `Bearer ${jwtToken}`
         }
@@ -2037,6 +2044,7 @@ onBeforeUnmount(() => {
 // 标记会话消息为已读
 const markAsRead = async (conversation) => {
   // 只有非临时会话且有未读消息才需要标记已读
+  // (注意：根据之前的修改，轮询时收到的新消息会增加 unreadCount，所以这里判断 > 0 是必要的)
   if (!conversation || 
       (typeof conversation.id === 'string' && conversation.id.startsWith('new_')) || 
       conversation.unreadCount <= 0) {
@@ -2045,10 +2053,15 @@ const markAsRead = async (conversation) => {
 
   try {
     const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-    // 构建正确的API端点
-    // 如果conversation.id是对话ID，使用这个路径
-    // 如果使用userId，则可能需要调整路径
-    const endpoint = `http://localhost:7070/api/messages/conversations/${conversation.id}/read`;
+    // --- 修改开始: 使用对方用户ID ---
+    // 构建正确的API端点，使用对方用户ID
+    const otherUserId = conversation.userId || conversation.otherUserId;
+    if (!otherUserId) {
+        console.error('轮询中标记会话已读失败：无法确定对方用户ID', conversation);
+        return; 
+    }
+    const endpoint = `http://localhost:7070/api/messages/conversations/${otherUserId}/read`;
+    // --- 修改结束 ---
     
     await axios.put(endpoint, {}, {
       headers: {
