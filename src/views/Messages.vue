@@ -902,8 +902,9 @@ const sendMessage = async () => {
     senderName: authStore.userInfo?.username,
     senderId: authStore.userInfo?.id,
     receiverId: receiverId,
-    timestamp: new Date().toISOString(),
-    sendTime: new Date().toISOString(),
+    // 使用东八区时间格式
+    timestamp: formatChineseISOTime(new Date()),
+    sendTime: formatChineseISOTime(new Date()),
     status: 'sending'
   };
   
@@ -1554,22 +1555,37 @@ const formatDate = (dateStr) => {
 const formatTime = (timestamp) => {
   if (!timestamp) return '';
   
-  // 直接从时间字符串提取时间部分，格式如"2025-04-19T16:27:57.000Z"
   try {
-    // 使用正则表达式提取时间部分
+    // 服务器时间已经是东八区时间，所以直接从字符串中提取时间部分
+    // 支持 ISO 格式的时间字符串如 "2023-10-27T16:27:57.000Z"
+    // 或者其他包含时间的字符串格式
+    
+    // 尝试使用正则表达式提取时间部分
     const timeMatch = timestamp.match(/T(\d{2}):(\d{2}):/);
     if (timeMatch) {
       // 直接使用提取的小时和分钟，不进行时区调整
       const hour = timeMatch[1];
       const minute = timeMatch[2];
-      
       return `${hour}:${minute}`;
     }
     
-    // 如果无法匹配，直接返回原始时间的一部分
-    return timestamp.substring(11, 16);
+    // 如果上面的提取失败，尝试其他常见格式
+    // 尝试直接提取格式为 "HH:mm" 的部分
+    if (timestamp.length >= 16 && timestamp.charAt(10) === 'T') {
+      return timestamp.substring(11, 16);
+    }
+    
+    // 处理可能的其他格式，最坏情况，返回第一个冒号前后的数字
+    const simpleMatch = timestamp.match(/(\d+):(\d+)/);
+    if (simpleMatch) {
+      return `${simpleMatch[1]}:${simpleMatch[2]}`;
+    }
+    
+    // 如果所有尝试都失败，使用新的 Date 对象，但不做时区转换
+    // 这是最后的后备方案
+    return timestamp.substring(0, 19);
   } catch (e) {
-    console.error('解析日期出错:', e);
+    console.error('解析时间出错:', e, timestamp);
     return timestamp; // 出错时返回原始值
   }
 };
@@ -1835,6 +1851,23 @@ const markMessageAsFailed = (messageId) => {
     messages.value[index].sendFailed = true;
     messages.value[index].sending = false;
   }
+};
+
+// 添加一个新函数，用于生成东八区格式的ISO时间字符串
+const formatChineseISOTime = (date) => {
+  // 获取年月日
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  
+  // 获取时分秒
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  
+  // 构造东八区ISO格式时间字符串 (YYYY-MM-DDThh:mm:ss.sssZ)
+  // 关键是保留东八区时间，而不是转换成UTC
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000Z`;
 };
 </script>
 
