@@ -63,8 +63,8 @@ onBeforeUnmount(() => {
   background-color: #f56c6c;
   color: white;
   border-radius: 10px;
-  min-width: 20px;
-  height: 20px;
+  /* min-width: 20px;
+  height: 20px; */
   font-size: 12px;
   display: flex;
   align-items: center;

@@ -637,6 +637,9 @@ const selectConversation = async (conversation) => {
       console.error('标记会话已读失败:', error);
     }
   }
+  
+  // 启动轮询以获取实时消息
+  startPolling();
 };
 
 // 加载消息
@@ -1869,6 +1872,227 @@ const formatChineseISOTime = (date) => {
   // 关键是保留东八区时间，而不是转换成UTC
   return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000Z`;
 };
+
+// 添加轮询相关变量
+let pollInterval = null;
+const POLLING_INTERVAL = 3000; // 3秒轮询一次
+
+// 开始轮询
+const startPolling = () => {
+  // 先清除可能存在的旧轮询
+  stopPolling();
+  
+  console.log('开始轮询最新消息');
+  // 每3秒查询一次新消息
+  pollInterval = setInterval(() => {
+    if (selectedConversation.value && activeConversationId.value) {
+      loadLatestMessages();
+    }
+  }, POLLING_INTERVAL);
+};
+
+// 停止轮询
+const stopPolling = () => {
+  if (pollInterval) {
+    console.log('停止轮询');
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
+};
+
+// 从服务器加载最新消息
+const loadLatestMessages = async () => {
+  try {
+    if (!selectedConversation.value || !messages.value || !Array.isArray(messages.value)) {
+      return;
+    }
+    
+    // 获取当前最新消息的ID或时间
+    let lastMessageId = 0;
+    let lastMessageTime = '';
+    
+    if (messages.value.length > 0) {
+      const lastMessage = messages.value[messages.value.length - 1];
+      lastMessageId = lastMessage.id || 0;
+      lastMessageTime = lastMessage.timestamp || lastMessage.sendTime || '';
+    }
+    
+    // 获取当前会话的对方用户ID
+    const targetUserId = selectedConversation.value?.userId || 
+                        selectedConversation.value?.otherUserId;
+    
+    if (!targetUserId) {
+      console.warn('无法确定会话对象的用户ID');
+      return;
+    }
+    
+    const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+    
+    // 构建API请求，使用用户ID作为会话标识
+    const response = await axios.get(
+      `http://localhost:7070/api/messages/${targetUserId}/latest`, 
+      {
+        headers: { 'Authorization': `Bearer ${jwtToken}` },
+        params: { 
+          lastId: lastMessageId,
+          lastTime: lastMessageTime
+        }
+      }
+    );
+    
+    console.log('轮询获取最新消息响应:', response.data);
+    
+    // 处理响应数据
+    let newMessages = [];
+    
+    // 处理不同格式的API响应
+    if (response.data && Array.isArray(response.data)) {
+      newMessages = response.data;
+    } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+      newMessages = response.data.data;
+    } else if (response.data && response.data.data && !Array.isArray(response.data.data)) {
+      // 处理响应中data字段是单个消息对象的情况
+      newMessages = [response.data.data];
+    } else if (response.data && !Array.isArray(response.data) && !response.data.data) {
+      // 处理响应本身是单个消息对象的情况
+      newMessages = [response.data];
+    }
+    
+    if (newMessages.length > 0) {
+      console.log(`收到 ${newMessages.length} 条新消息:`, newMessages);
+      
+      // 格式化消息，确保符合前端展示所需的格式
+      const formattedMessages = newMessages.map(msg => {
+        // 创建标准格式的消息对象
+        return {
+          id: msg.id,
+          content: msg.content,
+          senderId: msg.senderId,
+          senderName: msg.senderName,
+          senderAvatar: msg.senderAvatar,
+          receiverId: msg.receiverId,
+          receiverName: msg.receiverName,
+          receiverAvatar: msg.receiverAvatar,
+          sendTime: msg.sendTime || msg.timestamp,
+          timestamp: msg.sendTime || msg.timestamp,
+          isRead: msg.isRead || false,
+          attachmentUrl: msg.attachmentUrl,
+          attachmentName: msg.attachmentName,
+          attachmentType: msg.attachmentType,
+          referencePostId: msg.referencePostId,
+          referencePostTitle: msg.referencePostTitle,
+          // 确定消息是否由当前用户发送
+          isSentByCurrentUser: msg.senderId === authStore.userInfo?.id
+        };
+      });
+      
+      console.log('格式化后的新消息:', formattedMessages);
+      
+      // 改进的去重逻辑，更可靠地检测新消息
+      const existingIds = new Set(messages.value.map(m => String(m.id)));
+      const actualNewMessages = formattedMessages.filter(msg => {
+        // 确保消息ID被转换为字符串进行比较
+        return msg && msg.id !== undefined && !existingIds.has(String(msg.id));
+      });
+      
+      if (actualNewMessages.length > 0) {
+        console.log('添加新消息到聊天界面:', actualNewMessages);
+        // 添加新消息到消息列表
+        messages.value.push(...actualNewMessages);
+        
+        // 更新会话的最后一条消息
+        if (selectedConversation.value && actualNewMessages.length > 0) {
+          const latestMsg = actualNewMessages[actualNewMessages.length - 1];
+          selectedConversation.value.lastMessage = latestMsg.content || '收到新消息';
+          selectedConversation.value.lastMessageTime = latestMsg.sendTime || latestMsg.timestamp;
+          
+          // 更新未读消息数
+          selectedConversation.value.unreadCount = (selectedConversation.value.unreadCount || 0) + actualNewMessages.length;
+        }
+        
+        // 滚动到底部
+        nextTick(() => {
+          scrollToBottom();
+        });
+        
+        // 标记为已读
+        markAsRead(selectedConversation.value);
+      } else {
+        console.log('没有新的消息被添加，所有消息都已存在');
+      }
+    }
+  } catch (error) {
+    console.error('轮询获取最新消息失败:', error);
+  }
+};
+
+// 组件卸载时停止轮询
+onBeforeUnmount(() => {
+  // 停止轮询
+  stopPolling();
+  
+  // 其他现有清理代码保持不变
+});
+
+// 标记会话消息为已读
+const markAsRead = async (conversation) => {
+  // 只有非临时会话且有未读消息才需要标记已读
+  if (!conversation || 
+      (typeof conversation.id === 'string' && conversation.id.startsWith('new_')) || 
+      conversation.unreadCount <= 0) {
+    return;
+  }
+
+  try {
+    const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+    // 构建正确的API端点
+    // 如果conversation.id是对话ID，使用这个路径
+    // 如果使用userId，则可能需要调整路径
+    const endpoint = `http://localhost:7070/api/messages/conversations/${conversation.id}/read`;
+    
+    await axios.put(endpoint, {}, {
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`
+      }
+    });
+    
+    // 更新本地会话未读数
+    conversation.unreadCount = 0;
+    
+    // 触发消息已读事件，更新页眉上的未读消息徽章
+    eventBus.emit('message:read');
+    
+    console.log('轮询中标记会话已读');
+  } catch (error) {
+    console.error('轮询中标记会话已读失败:', error);
+  }
+};
+
+// return {
+//   newMessage,
+//   messages,
+//   selectedConversation,
+//   conversations,
+//   activeTab,
+//   contacts,
+//   sendMessage,
+//   selectConversation,
+//   determineIfSent,
+//   formatTime,
+//   messageInputRef,
+//   modalVisible,
+//   attachmentPreview,
+//   removeAttachment,
+//   forwardDialog,
+//   loadUserFavorites,
+//   forwardMessageToUser,
+//   loadContacts,
+//   closeForwardModal,
+//   showForwardModal,
+//   startChat,
+//   startPolling,   // 添加轮询启动函数
+//   stopPolling     // 添加轮询停止函数
+// };
 </script>
 
 <style scoped>
