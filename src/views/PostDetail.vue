@@ -62,6 +62,11 @@
               <i class="comment-icon">💬</i>
               <span>{{ post.commentsCount }}</span>
             </div>
+            <!-- 添加收藏按钮 -->
+            <div class="favorite-button" @click="toggleFavorite" :class="{ 'favorited': isFavorited }">
+              <i class="favorite-icon">⭐</i>
+              <span>{{ isFavorited ? '已收藏' : '收藏' }}</span>
+            </div>
   </div>
           
         <!-- 评论区域 -->
@@ -193,6 +198,7 @@ export default defineComponent({
     const comments = ref([]);
     const authStore = useAuthStore();
     const isLiked = ref(false);
+    const isFavorited = ref(false);
     const replyContext = ref({
   parentCommentId: null,
   replyToUserId: null
@@ -360,9 +366,10 @@ export default defineComponent({
         if (!response.data) throw new Error('无效的响应数据');
         post.value = response.data;
         
-        // 如果用户已登录，获取帖子详情后检查当前用户是否已点赞
+        // 如果用户已登录，获取帖子详情后检查当前用户是否已点赞和收藏
         if (authStore.isLoggedIn) {
           await checkLikeStatus();
+          await checkFavoriteStatus();
         }
         
         // 获取帖子详情后记录浏览 (仅当帖子成功加载)
@@ -483,6 +490,37 @@ const sendComment = async () => {
       }
     };
 
+    // 检查当前用户是否已收藏该帖子
+    const checkFavoriteStatus = async () => {
+      if (!authStore.isLoggedIn || !post.value) return;
+      
+      try {
+        const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+        const response = await axios.get(`/api/favorites/check/${post.value.id}`, {
+          headers: {
+            Authorization: `Bearer ${jwtToken}`
+          }
+        });
+        
+        // 根据后端返回结构调整
+        if (response.data && response.data.data !== undefined) {
+          // 如果返回格式是 { data: true/false }
+          isFavorited.value = response.data.data;
+        } else if (response.data && response.data.favorited !== undefined) {
+          // 如果返回格式是 { favorited: true/false }
+          isFavorited.value = response.data.favorited;
+        } else {
+          // 其他情况，尝试直接使用返回值
+          isFavorited.value = response.data || false;
+        }
+        
+        console.log('收藏状态检查结果:', isFavorited.value);
+      } catch (error) {
+        console.error('检查收藏状态失败:', error);
+        isFavorited.value = false;
+      }
+    };
+
     // 切换点赞状态
     const toggleLike = async () => {
       if (!authStore.isLoggedIn) {
@@ -521,6 +559,43 @@ const sendComment = async () => {
         }
       } catch (error) {
         console.error('点赞操作失败:', error);
+        ElMessage.error('操作失败，请稍后再试');
+      }
+    };
+
+    // 切换收藏状态
+    const toggleFavorite = async () => {
+      if (!authStore.isLoggedIn) {
+        ElMessage.error('请先登录');
+        return;
+      }
+      
+      try {
+        const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+        
+        if (isFavorited.value) {
+          // 取消收藏
+          await axios.delete(`/api/favorites/${post.value.id}`, {
+            headers: {
+              Authorization: `Bearer ${jwtToken}`
+            }
+          });
+          
+          isFavorited.value = false;
+          ElMessage.success('已取消收藏');
+        } else {
+          // 添加收藏
+          await axios.post(`/api/favorites/${post.value.id}`, {}, {
+            headers: {
+              Authorization: `Bearer ${jwtToken}`
+            }
+          });
+          
+          isFavorited.value = true;
+          ElMessage.success('收藏成功');
+        }
+      } catch (error) {
+        console.error('收藏操作失败:', error);
         ElMessage.error('操作失败，请稍后再试');
       }
     };
@@ -774,7 +849,9 @@ const sendComment = async () => {
       authStore,
       recordPostView,
       recordPostExit,
-      formatContent
+      formatContent,
+      isFavorited,
+      toggleFavorite
     };
   }
 });
@@ -1270,22 +1347,16 @@ main {
 /* 添加点赞和评论计数区域样式 */
 .post-actions {
   display: flex;
-  margin-top: 20px;
-  border-top: 1px solid #eee;
-  padding-top: 15px;
-  gap: 20px;
+  padding: 15px 20px;
+  border-top: 1px solid #eaeaea;
+  position: relative;
 }
 
 .like-button, .comment-count {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #666;
+  margin-right: 15px;
   cursor: pointer;
-  transition: all 0.2s;
-  padding: 5px 10px;
-  border-radius: 4px;
 }
 
 .like-button:hover, .comment-count:hover {
@@ -1442,5 +1513,33 @@ main {
   word-wrap: break-word; /* 允许长单词换行 */
   overflow-wrap: break-word; /* 现代浏览器中确保长单词换行 */
   white-space: pre-line; /* 保留换行符和空格 */
+}
+
+/* 添加收藏按钮样式 */
+.favorite-button {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background-color: #f5f5f5;
+  transition: all 0.3s ease;
+}
+
+.favorite-button:hover {
+  background-color: #e0e0e0;
+}
+
+.favorite-button.favorited {
+  background-color: #fff8c5;
+  color: #e6a23c;
+}
+
+.favorite-icon {
+  margin-right: 5px;
+  font-size: 16px;
 }
 </style>

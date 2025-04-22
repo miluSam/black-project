@@ -129,6 +129,26 @@
                   {{ message.content }}
                   <div class="message-time">{{ formatTime(message.sendTime || message.timestamp) }}</div>
                 </div>
+                <!-- 渲染分享的帖子预览 -->
+                <div v-else-if="message.referencePostId" 
+                     class="shared-post-preview" 
+                     :class="[(authStore.userInfo?.username === message.senderName) ? 'sent' : 'received']"
+                     @click="handlePostClick(message.referencePostId)">
+                  <div class="post-preview-content">
+                    <img v-if="message.referencePostImageUrl || (message.referencePost && message.referencePost.imageUrl && message.referencePost.imageUrl[0])" 
+                         :src="message.referencePostImageUrl || (message.referencePost && message.referencePost.imageUrl ? message.referencePost.imageUrl[0] : null)" 
+                         alt="Post Image" class="post-preview-image"/>
+                    <div class="post-preview-details">
+                      <div class="post-preview-title">{{ message.referencePostTitle || (message.referencePost ? message.referencePost.title : '查看帖子详情') }}</div>
+                      <div class="post-preview-snippet">{{ message.referencePostContentSnippet || (message.referencePost ? truncate(message.referencePost.content, 100) : message.content) }}</div>
+                    </div>
+                  </div>
+                  <div class="message-time">{{ formatTime(message.sendTime || message.timestamp) }}</div>
+                  <button v-if="message.sendFailed" class="retry-button" @click="retryMessage(message)">
+                    <el-icon><RefreshRight /></el-icon> 重试
+                  </button>
+                </div>
+                <!-- 渲染普通消息 -->
                 <template v-else>
                   <div :class="['message-bubble', message.sendFailed ? 'failed' : '']">
                     <template v-if="message.attachment || message.attachmentUrl">
@@ -208,56 +228,13 @@
     <!-- 转发收藏对话框 -->
     <div v-if="forwardDialog.show" class="forward-dialog">
       <div class="forward-dialog-header">
-        <span>转发收藏</span>
-        <div class="dialog-close" @click="forwardDialog.show = false">
+        <span>我的收藏</span>
+        <div class="dialog-close" @click="closeForwardDialog">
           <el-icon><Close /></el-icon>
         </div>
       </div>
       <div class="forward-dialog-content">
-        <div class="forward-tabs">
-          <div 
-            class="forward-tab" 
-            :class="{ 'active': forwardDialog.activeTab === 'forward' }"
-            @click="activateForwardTab"
-          >
-            联系人
-          </div>
-          <div 
-            class="forward-tab" 
-            :class="{ 'active': forwardDialog.activeTab === 'favorite' }"
-            @click="loadUserFavorites"
-          >
-            我的收藏
-          </div>
-        </div>
-        
-        <div v-if="forwardDialog.activeTab === 'forward'" class="tab-content">
-          <div class="loading" v-if="loadingContacts">
-            <el-icon><Loading /></el-icon> 加载联系人中...
-          </div>
-          <div v-else-if="forwardDialog.contacts.length === 0" class="empty-favorites">
-            暂无联系人
-          </div>
-          <div v-else class="contact-list">
-            <div 
-              v-for="contact in forwardDialog.contacts" 
-              :key="contact.id"
-              class="contact-item"
-              @click="toggleContactSelection(contact)"
-            >
-              <img :src="contact.avatar || contact.imageUrl || 'https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png'" :alt="contact.username" class="contact-avatar">
-              <span class="contact-name">{{ contact.username }}</span>
-              <div class="contact-checkbox" :class="{ 'selected': contact.selected }">
-                <el-icon v-if="contact.selected"><Check /></el-icon>
-              </div>
-            </div>
-          </div>
-          <button class="action-button" @click="forwardSelectedPost" :disabled="!hasSelectedContacts || !selectedFavorite">
-            转发
-          </button>
-        </div>
-        
-        <div v-else class="tab-content">
+        <div class="tab-content">
           <div class="loading" v-if="loadingFavorites">
             <el-icon><Loading /></el-icon> 加载收藏帖子中...
           </div>
@@ -276,14 +253,15 @@
               <div class="favorite-summary">{{ truncate(favorite.content, 50) }}</div>
               <div class="favorite-date">{{ formatDate(favorite.favoriteDate) }}</div>
             </div>
+            <!-- 添加发送按钮 -->
+            <button 
+              v-if="selectedFavorite"
+              class="action-button send-favorite-button"
+              @click="prepareFavoriteForSending"
+            >
+              发送
+            </button>
           </div>
-          <button 
-            class="action-button" 
-            @click="forwardDialog.activeTab = 'forward'"
-            :disabled="!selectedFavorite"
-          >
-            下一步
-          </button>
         </div>
       </div>
     </div>
@@ -875,9 +853,11 @@ const removeAttachment = () => {
 
 // 发送消息
 const sendMessage = async () => {
-  // 检查消息内容和会话是否有效
-  if (!newMessage.value.trim() && !attachmentPreview.value.show) {
-    console.log('消息为空且没有附件，不发送');
+  const isSharingFavorite = !!selectedFavorite.value; // 检查是否正在分享收藏
+
+  // 检查消息内容、附件或分享收藏
+  if (!newMessage.value.trim() && !attachmentPreview.value.show && !isSharingFavorite) {
+    console.log('消息为空且没有附件或收藏，不发送');
     return;
   }
   
@@ -905,58 +885,93 @@ const sendMessage = async () => {
   
   console.log('发送消息给用户:', receiverId);
   
-  // 创建一个临时消息对象，显示在UI中
+  // 创建一个临时消息对象
   const tempMessage = {
     id: `temp_${Date.now()}`,
-    content: newMessage.value,
     senderName: authStore.userInfo?.username,
     senderId: authStore.userInfo?.id,
     receiverId: receiverId,
-    // 使用东八区时间格式
     timestamp: formatChineseISOTime(new Date()),
     sendTime: formatChineseISOTime(new Date()),
     status: 'sending'
   };
-  
-  // 如果有附件，添加附件信息
-  if (attachmentPreview.value.show) {
+
+  // 准备发送到后端的数据
+  const messageData = {
+    receiverId: receiverId
+  };
+
+  if (isSharingFavorite) {
+    // 处理分享收藏的情况
+    const favorite = selectedFavorite.value;
+    const favoriteTitle = favorite.title || '无标题';
+    
+    tempMessage.content = `分享帖子：【${favoriteTitle}】`; // 基础文本内容
+    tempMessage.isSharedPost = true; // 标记为分享的帖子
+    tempMessage.referencePostId = favorite.id;
+    tempMessage.referencePostTitle = favoriteTitle;
+    tempMessage.referencePostImageUrl = favorite.imageUrl?.[0]; // 取第一张图片作为预览
+    tempMessage.referencePostContentSnippet = truncate(favorite.content || favorite.summary || '', 100); // 内容摘要
+
+    messageData.content = tempMessage.content; // 发送基础文本
+    messageData.referencePostId = favorite.id;
+    messageData.referencePostTitle = favoriteTitle;
+    // 可以选择性地发送更多引用信息给后端，取决于API设计
+    // messageData.referencePostImageUrl = tempMessage.referencePostImageUrl; 
+    // messageData.referencePostContentSnippet = tempMessage.referencePostContentSnippet;
+
+    selectedFavorite.value = null; // 清除选中的收藏
+
+  } else if (attachmentPreview.value.show) {
+    // 处理带附件的消息
+    tempMessage.content = newMessage.value; // 附件可以附带文本消息
     tempMessage.attachment = {
       type: attachmentPreview.value.type,
       url: attachmentPreview.value.url,
       name: attachmentPreview.value.name
     };
-    
-    // 图片类型的附件
     if (attachmentPreview.value.type === 'image') {
       tempMessage.attachmentType = 'image';
       tempMessage.attachmentUrl = attachmentPreview.value.url;
     } else {
-      // 文件类型的附件
       tempMessage.attachmentType = 'file';
       tempMessage.attachmentUrl = attachmentPreview.value.url;
       tempMessage.attachmentName = attachmentPreview.value.name;
     }
+    
+    messageData.content = tempMessage.content;
+    messageData.attachmentType = tempMessage.attachmentType;
+    messageData.attachmentUrl = tempMessage.attachmentUrl;
+    if (tempMessage.attachmentName) {
+      messageData.attachmentName = tempMessage.attachmentName;
+    }
+    
+    // 清空输入框和附件预览
+    newMessage.value = '';
+    removeAttachment(); // 使用 removeAttachment 清理预览状态
+
+  } else {
+    // 处理纯文本消息
+    tempMessage.content = newMessage.value;
+    messageData.content = tempMessage.content;
+    
+    // 清空输入框
+    newMessage.value = '';
   }
-  
+
   // 先在UI中添加这条消息
   messages.value.push(tempMessage);
   
-  // 清空输入框和附件预览
-  newMessage.value = '';
-  attachmentPreview.value.show = false;
-  
   // 更新会话的最后一条消息
   if (selectedConversation.value) {
-    selectedConversation.value.lastMessage = tempMessage.content || '发送了一个附件';
+    selectedConversation.value.lastMessage = tempMessage.content || (tempMessage.isSharedPost ? '分享了一个帖子' : '发送了一个附件');
     selectedConversation.value.lastMessageTime = new Date().toISOString();
     
     // 如果是临时会话，确保其位于列表顶部
-    // 添加类型检查，确保 id 是字符串并且只有字符串才调用 startsWith
     const convId = selectedConversation.value.id;
     if (typeof convId === 'string' && (convId.startsWith('new_') || convId.startsWith('temp_'))) {
       const index = conversations.value.findIndex(c => c.id === selectedConversation.value.id);
       if (index > 0) {
-        // 移到列表顶部
         const conv = conversations.value.splice(index, 1)[0];
         conversations.value.unshift(conv);
       }
@@ -969,21 +984,6 @@ const sendMessage = async () => {
   
   try {
     const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-    
-    // 准备发送的消息数据
-    const messageData = {
-      content: tempMessage.content,
-      receiverId: receiverId
-    };
-    
-    // 如果有附件，添加附件信息
-    if (tempMessage.attachment) {
-      messageData.attachmentType = tempMessage.attachmentType;
-      messageData.attachmentUrl = tempMessage.attachmentUrl;
-      if (tempMessage.attachmentName) {
-        messageData.attachmentName = tempMessage.attachmentName;
-      }
-    }
     
     // 发送消息到服务器
     console.log('发送消息数据:', messageData);
@@ -998,29 +998,29 @@ const sendMessage = async () => {
     if (response.status === 200 || response.status === 201) {
       console.log('消息发送成功:', response.data);
       
-      // 更新临时消息的状态为已发送，并用服务器返回的消息ID替换临时ID
-      const serverMessageId = response.data.id || response.data.data?.id;
+      // 更新临时消息的状态和ID
+      const serverMessage = response.data.data || response.data; // 适配可能的响应结构
+      const serverMessageId = serverMessage.id;
       
-      // 找到临时消息的索引
       const tempIndex = messages.value.findIndex(m => m.id === tempMessage.id);
       if (tempIndex !== -1) {
-        // 更新消息状态
-        messages.value[tempIndex].id = serverMessageId || tempMessage.id;
-        messages.value[tempIndex].status = 'sent';
-        delete messages.value[tempIndex].sendFailed;
+        // 用服务器返回的完整消息替换临时消息，确保所有字段（包括引用信息）都更新
+        messages.value[tempIndex] = {
+            ...messages.value[tempIndex], // 保留可能的前端状态如isSharedPost
+            ...serverMessage, // 覆盖来自服务器的数据
+            id: serverMessageId,
+            status: 'sent',
+            sendFailed: false // 确保移除失败标记
+        };
       }
       
-      // 如果这是一个新会话，尝试从响应中获取真实的会话ID
-      // 再次添加类型检查，确保 id 是字符串
+      // 处理新会话逻辑（与之前保持一致）
       const currentConvId = selectedConversation.value.id;
       if (typeof currentConvId === 'string' && (currentConvId.startsWith('new_') || currentConvId.startsWith('temp_'))) {
-        const conversationId = response.data.conversationId || 
-                             response.data.data?.conversationId || 
-                             null;
-        
+         // ... (刷新逻辑保持不变) ...
+        const conversationId = serverMessage.conversationId;
         console.log('检测到临时会话发送消息成功，准备刷新页面');
         
-        // 保存会话用户ID，确保一定有值
         const targetUserId = selectedConversation.value.userId || 
                            selectedConversation.value.otherUserId || 
                            tempMessage.receiverId;
@@ -1029,28 +1029,17 @@ const sendMessage = async () => {
         
         if (conversationId) {
           console.log('获取到真实会话ID:', conversationId);
-          // 更新会话ID
           selectedConversation.value.id = conversationId;
           activeConversationId.value = conversationId;
-          
-          // 更新会话列表中的项
-          const index = conversations.value.findIndex(c => 
-            c.id === tempMessage.id || c.id.startsWith('new_') || c.id.startsWith('temp_')
-          );
-          if (index !== -1) {
-            conversations.value[index].id = conversationId;
-          }
-          
+          const index = conversations.value.findIndex(c => c.id === tempMessage.id || c.id.startsWith('new_') || c.id.startsWith('temp_'));
+          if (index !== -1) conversations.value[index].id = conversationId;
           localStorage.setItem('lastConversationId', conversationId);
         }
         
-        // 添加额外的刷新标记，确保刷新后能识别
         localStorage.setItem('needsRefreshAfterSend', 'true');
         localStorage.setItem('refreshTimestamp', Date.now().toString());
-        
         console.log('准备刷新页面，已保存所有必要信息');
         
-        // 直接强制刷新页面
         try {
           console.log('重发消息后强制刷新页面...');
           window.location.href = window.location.pathname + '?refresh=' + Date.now();
@@ -1058,12 +1047,9 @@ const sendMessage = async () => {
           console.error('刷新失败，尝试替代方法');
           setTimeout(() => window.location.reload(true), 100);
         }
-        
-        return; // 终止后续执行，因为页面即将刷新
+        return;
       }
       
-      // 在发送消息后更新未读消息数量，可能会收到新消息
-      // 发送事件通知徽章组件更新
       eventBus.emit('message:read');
     } else {
       markMessageAsFailed(tempMessage.id);
@@ -1253,6 +1239,93 @@ const activateForwardTab = () => {
     });
   } else {
     console.log('使用现有联系人列表，数量:', forwardDialog.value.contacts.length);
+  }
+};
+
+// 激活收藏标签页
+const activateFavoriteTab = () => {
+  forwardDialog.value.activeTab = 'favorite';
+  loadUserFavorites();
+};
+
+// 显示转发收藏对话框
+const showForwardDialog = () => {
+  console.log('打开收藏对话框');
+  forwardDialog.value.show = true;
+  forwardDialog.value.activeTab = 'favorite'; // 设置为收藏标签页
+  loadUserFavorites(); // 加载用户收藏的帖子
+};
+
+// 关闭转发收藏对话框
+const closeForwardDialog = () => {
+  console.log('关闭转发收藏对话框');
+  forwardDialog.value.show = false;
+  selectedFavorite.value = null; // 清除选中的收藏
+};
+
+// 选择收藏帖子
+const selectFavorite = (favorite) => {
+  console.log('选择收藏帖子:', favorite);
+  selectedFavorite.value = favorite;
+};
+
+// 切换联系人选择状态
+const toggleContactSelection = (contact) => {
+  console.log('切换联系人选择状态:', contact);
+  contact.selected = !contact.selected;
+};
+
+// 计算属性：是否有选中的联系人
+const hasSelectedContacts = computed(() => {
+  return forwardDialog.value.contacts.some(contact => contact.selected);
+});
+
+// 转发选中的帖子给选中的联系人
+const forwardSelectedPost = async () => {
+  if (!selectedFavorite.value) {
+    ElMessage.warning('请先选择一个收藏的帖子');
+    return;
+  }
+  
+  const selectedContacts = forwardDialog.value.contacts.filter(contact => contact.selected);
+  if (selectedContacts.length === 0) {
+    ElMessage.warning('请至少选择一个联系人');
+    return;
+  }
+  
+  try {
+    const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+    
+    // 创建转发消息内容
+    const messageContent = `分享帖子：${selectedFavorite.value.title}`;
+    
+    // 获取选中的联系人ID列表
+    const recipientIds = selectedContacts.map(contact => contact.id);
+    
+    // 发送转发消息
+    await Promise.all(recipientIds.map(async (recipientId) => {
+      try {
+        await axios.post('/api/messages/send', {
+          receiverId: recipientId,
+          content: messageContent,
+          referencePostId: selectedFavorite.value.id,
+          referencePostTitle: selectedFavorite.value.title
+        }, {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`
+          }
+        });
+      } catch (err) {
+        console.error(`向用户 ${recipientId} 发送消息失败:`, err);
+        throw err; // 继续抛出以便外层捕获
+      }
+    }));
+    
+    ElMessage.success(`已成功转发给 ${selectedContacts.length} 位联系人`);
+    closeForwardDialog();
+  } catch (error) {
+    console.error('转发帖子失败:', error);
+    ElMessage.error('转发失败，请稍后重试');
   }
 };
 
@@ -1561,6 +1634,13 @@ const formatDate = (dateStr) => {
   return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
 };
 
+// 截断文本的辅助函数
+const truncate = (text, length) => {
+  if (!text) return '';
+  if (text.length <= length) return text;
+  return text.substring(0, length) + '...';
+};
+
 // 格式化时间的辅助函数
 const formatTime = (timestamp) => {
   if (!timestamp) return '';
@@ -1607,15 +1687,39 @@ const loadUserFavorites = async () => {
     console.log('开始加载收藏帖子...');
     
     const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-    const response = await axios.get('http://localhost:7070/api/messages/favorites', {
+    const response = await axios.get('/api/favorites/by-user', {
       headers: {
         'Authorization': `Bearer ${jwtToken}`
       }
     });
     
+    console.log('收藏API响应:', response.data);
+    
     if (response.status === 200) {
-      forwardDialog.value.favorites = response.data || [];
-      console.log('收藏帖子加载成功:', forwardDialog.value.favorites);
+      // 处理嵌套的数据结构
+      let favorites = [];
+      
+      if (response.data && response.data.data && response.data.data.records) {
+        // 接口返回格式: { code: 200, data: { records: [...] } }
+        favorites = response.data.data.records;
+      } else if (response.data && response.data.records) {
+        // 接口返回格式: { records: [...] }
+        favorites = response.data.records;
+      } else if (Array.isArray(response.data)) {
+        // 接口直接返回数组格式
+        favorites = response.data;
+      } else {
+        // 其他格式，使用空数组
+        favorites = [];
+        console.warn('未能识别的收藏数据格式:', response.data);
+      }
+      
+      forwardDialog.value.favorites = favorites;
+      console.log('收藏帖子加载成功:', favorites);
+      
+      if (favorites.length === 0) {
+        console.log('收藏帖子列表为空');
+      }
     }
   } catch (error) {
     console.error('加载收藏帖子失败:', error);
@@ -2081,6 +2185,232 @@ const markAsRead = async (conversation) => {
   }
 };
 
+// 准备发送选中的收藏
+const prepareFavoriteForSending = () => {
+  if (!selectedFavorite.value) return;
+  // 直接调用专门的转发帖子函数
+  forwardPost(selectedFavorite.value.id);
+  // 关闭对话框
+  closeForwardDialog();
+};
+
+// 转发帖子到聊天
+const forwardPost = async (postId) => {
+  // 检查是否有选中的会话
+  if (!selectedConversation.value) {
+    ElMessage.warning('请先选择一个对话');
+    return;
+  }
+  
+  // 获取接收者ID
+  const receiverId = selectedConversation.value?.userId || 
+                    selectedConversation.value?.otherUserId;
+                    
+  if (!receiverId) {
+    console.error('无法确定接收者ID', selectedConversation.value);
+    ElMessage.warning('无法确定消息接收者');
+    return;
+  }
+  
+  console.log('转发帖子给用户:', receiverId, '帖子ID:', postId);
+  
+  // 创建一个临时消息对象在UI中显示
+  const tempMessage = {
+    id: `temp_${Date.now()}`,
+    senderName: authStore.userInfo?.username,
+    senderId: authStore.userInfo?.id,
+    receiverId: receiverId,
+    content: `分享帖子...`, // 临时文本
+    timestamp: formatChineseISOTime(new Date()),
+    sendTime: formatChineseISOTime(new Date()),
+    status: 'sending',
+    isSharedPost: true,
+    referencePostId: postId,
+    // 这些信息只用于UI展示，后端会根据postId获取完整信息
+    referencePostTitle: selectedFavorite.value.title || '查看帖子',
+    referencePostImageUrl: selectedFavorite.value.imageUrl?.[0],
+    referencePostContentSnippet: truncate(selectedFavorite.value.content || selectedFavorite.value.summary || '', 100)
+  };
+  
+  // 先在UI中添加这条消息
+  messages.value.push(tempMessage);
+  
+  // 更新会话的最后一条消息
+  if (selectedConversation.value) {
+    selectedConversation.value.lastMessage = '分享了一个帖子';
+    selectedConversation.value.lastMessageTime = new Date().toISOString();
+    
+    // 如果是临时会话，确保其位于列表顶部
+    const convId = selectedConversation.value.id;
+    if (typeof convId === 'string' && (convId.startsWith('new_') || convId.startsWith('temp_'))) {
+      const index = conversations.value.findIndex(c => c.id === selectedConversation.value.id);
+      if (index > 0) {
+        const conv = conversations.value.splice(index, 1)[0];
+        conversations.value.unshift(conv);
+      }
+    }
+  }
+  
+  // 滚动到底部
+  await nextTick();
+  scrollToBottom();
+  
+  try {
+    const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+    
+    // 准备要发送到后端的数据，使用正确的格式
+    const forwardData = {
+      receiverId: receiverId,
+      postId: postId
+    };
+    
+    // 发送转发请求到专门的接口
+    console.log('发送转发帖子请求:', forwardData);
+    const response = await axios.post('api/messages/forward', forwardData, {
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log('帖子转发响应:', response);
+    
+    if (response.status === 200 || response.status === 201) {
+      console.log('帖子转发成功:', response.data);
+      
+      // 更新临时消息的状态和ID
+      const serverMessage = response.data.data || response.data;
+      const serverMessageId = serverMessage.id;
+      
+      const tempIndex = messages.value.findIndex(m => m.id === tempMessage.id);
+      if (tempIndex !== -1) {
+        // 用服务器返回的完整消息替换临时消息
+        messages.value[tempIndex] = {
+          ...messages.value[tempIndex], // 保留前端状态
+          ...serverMessage, // 服务器返回的数据
+          id: serverMessageId,
+          status: 'sent',
+          sendFailed: false,
+          // 保留UI展示需要的字段，以防后端没有返回
+          isSharedPost: true,
+          referencePostId: serverMessage.referencePostId || postId,
+          referencePostTitle: serverMessage.referencePostTitle || tempMessage.referencePostTitle,
+          referencePostImageUrl: serverMessage.referencePostImageUrl || tempMessage.referencePostImageUrl,
+          referencePostContentSnippet: serverMessage.referencePostContentSnippet || tempMessage.referencePostContentSnippet
+        };
+      }
+      
+      // 处理新会话逻辑
+      const currentConvId = selectedConversation.value.id;
+      if (typeof currentConvId === 'string' && (currentConvId.startsWith('new_') || currentConvId.startsWith('temp_'))) {
+        const conversationId = serverMessage.conversationId;
+        console.log('检测到临时会话发送消息成功，准备刷新页面');
+        
+        const targetUserId = selectedConversation.value.userId || 
+                           selectedConversation.value.otherUserId || 
+                           tempMessage.receiverId;
+        console.log('保存用户ID到localStorage:', targetUserId);
+        localStorage.setItem('lastMessageUserId', targetUserId);
+        
+        if (conversationId) {
+          console.log('获取到真实会话ID:', conversationId);
+          selectedConversation.value.id = conversationId;
+          activeConversationId.value = conversationId;
+          const index = conversations.value.findIndex(c => c.id === tempMessage.id || c.id.startsWith('new_') || c.id.startsWith('temp_'));
+          if (index !== -1) conversations.value[index].id = conversationId;
+          localStorage.setItem('lastConversationId', conversationId);
+        }
+        
+        localStorage.setItem('needsRefreshAfterSend', 'true');
+        localStorage.setItem('refreshTimestamp', Date.now().toString());
+        console.log('准备刷新页面，已保存所有必要信息');
+        
+        try {
+          console.log('转发帖子后强制刷新页面...');
+          window.location.href = window.location.pathname + '?refresh=' + Date.now();
+        } catch(e) {
+          console.error('刷新失败，尝试替代方法');
+          setTimeout(() => window.location.reload(true), 100);
+        }
+        return;
+      }
+      
+      eventBus.emit('message:read');
+    } else {
+      markMessageAsFailed(tempMessage.id);
+    }
+  } catch (error) {
+    console.error('转发帖子失败:', error);
+    markMessageAsFailed(tempMessage.id);
+  }
+};
+
+// 添加与Index.vue一致的帖子点击处理方法
+const handlePostClick = (postId) => {
+  if (!postId) return;
+  router.push({ 
+    name: 'PostDetail', 
+    query: { postId: postId } 
+  });
+};
+
+// 加载对话消息
+const loadConversationMessages = async (convId) => {
+  if (!convId) return;
+  
+  isLoadingMessages.value = true;
+  
+  try {
+    const token = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+    console.log('开始加载会话消息，会话ID:', convId);
+    
+    const response = await axios.get(`/api/messages/conversation/${convId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    console.log('获取会话消息响应:', response);
+    
+    if (response.status === 200) {
+      const messageData = response.data.data || response.data;
+      console.log('获取到的消息:', messageData);
+      
+      // 处理消息，确保所有字段格式统一
+      messages.value = messageData.map(msg => {
+        // 对于分享的帖子，确保有正确的UI展示标记
+        if (msg.referencePostId || msg.referencePost) {
+          return {
+            ...msg,
+            isSharedPost: true,
+            // 从referencePost中提取可能需要的额外信息用于UI展示
+            referencePostImageUrl: msg.referencePostImageUrl || (msg.referencePost && msg.referencePost.imageUrl ? msg.referencePost.imageUrl[0] : null),
+            referencePostTitle: msg.referencePostTitle || (msg.referencePost ? msg.referencePost.title : null),
+            referencePostContentSnippet: msg.referencePostContentSnippet || (msg.referencePost ? truncate(msg.referencePost.content, 100) : null)
+          };
+        }
+        return msg;
+      });
+      
+      // 标记为已读
+      markConversationAsRead(convId);
+      
+      // 滚动到底部
+      nextTick(() => {
+        scrollToBottom();
+      });
+    } else {
+      console.error('获取会话消息失败:', response);
+      ElMessage.error('加载消息失败');
+    }
+  } catch (error) {
+    console.error('获取消息错误:', error);
+    ElMessage.error('加载消息发生错误');
+  } finally {
+    isLoadingMessages.value = false;
+  }
+};
+
 // return {
 //   newMessage,
 //   messages,
@@ -2104,7 +2434,12 @@ const markAsRead = async (conversation) => {
 //   showForwardModal,
 //   startChat,
 //   startPolling,   // 添加轮询启动函数
-//   stopPolling     // 添加轮询停止函数
+//   stopPolling,    // 添加轮询停止函数
+//   formatDate,     // 日期格式化
+//   truncate,       // 文本截断
+//   selectFavorite, // 选择收藏
+//   closeForwardDialog, // 关闭对话框
+//   showForwardDialog   // 显示对话框
 // };
 </script>
 
@@ -3249,5 +3584,105 @@ main {
 
 .conversation-item:hover .delete-conversation-btn {
   opacity: 1;
+}
+
+/* 为发送按钮添加一些边距 */
+.send-favorite-button {
+  margin-top: 15px;
+}
+
+/* 共享帖子预览样式 */
+.shared-post-preview {
+  padding: 10px;
+  border-radius: 12px;
+  margin-bottom: 5px; /* 减少与下方时间的间距 */
+  cursor: pointer;
+  transition: background-color 0.2s;
+  max-width: 350px; /* 限制最大宽度 */
+  word-break: break-word;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08);
+}
+
+.shared-post-preview.sent {
+  background-color: #e6f7ff; /* 淡蓝色背景 */
+  border: 1px solid #b3e0ff;
+  align-self: flex-end; /* 靠右 */
+}
+
+.shared-post-preview.received {
+  background-color: #f5f7fa; /* 淡灰色背景 */
+  border: 1px solid #eaedf3;
+  align-self: flex-start; /* 靠左 */
+}
+
+.shared-post-preview:hover {
+  background-color: #d9ecff; /* 悬停时加深颜色 */
+}
+
+.shared-post-preview.received:hover {
+  background-color: #e4e8f1;
+}
+
+.post-preview-content {
+  display: flex;
+  align-items: flex-start; /* 顶部对齐 */
+  gap: 10px;
+}
+
+.post-preview-image {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0; /* 防止图片被压缩 */
+}
+
+.post-preview-details {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 防止内容溢出 */
+  flex-grow: 1;
+}
+
+.post-preview-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #303133;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.post-preview-snippet {
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.4;
+  max-height: 40px; /* 限制摘要高度，约两行 */
+  overflow: hidden;
+  /* 使用 -webkit-box 实现多行省略 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* 显示两行 */
+  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
+}
+
+/* 调整分享帖子预览下的时间位置 */
+.shared-post-preview .message-time {
+  font-size: 11px; /* 稍小一点 */
+  color: #94a3b8;
+  margin-top: 6px; /* 与预览内容保持一点距离 */
+  text-align: right; /* 时间靠右 */
+  width: 100%;
+}
+.shared-post-preview.received .message-time {
+    text-align: left; /* 收到的消息时间靠左 */
+}
+
+/* 调整重试按钮在分享帖子预览中的位置 */
+.shared-post-preview .retry-button {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
 }
 </style> 

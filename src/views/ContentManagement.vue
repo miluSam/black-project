@@ -1000,7 +1000,7 @@ export default defineComponent({
             // 获取 content-header 的实际高度
             const headerHeight = contentHeader.offsetHeight;
             // 设置帖子列表的顶部间距，确保不重叠
-            postsList.style.marginTop = `${headerHeight + 20}px`; // 20px的额外间距
+            postsList.style.marginTop = `${headerHeight - 30}px`; 
             
             // 重新计算帖子列表的高度
             const topNavHeight = 75; // 顶部导航栏高度

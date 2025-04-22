@@ -60,63 +60,136 @@
           
           <!-- 帖子标题 -->
           <div class="post-section-title">
-            <h3>用户发布的帖子</h3>
-          </div>
-          
-          <!-- 没有帖子时的提示 -->
-          <div v-if="userPosts.length === 0 && !postsError" class="no-posts">
-            该用户暂未发布任何帖子
-          </div>
-          
-          <!-- 帖子获取错误提示 -->
-          <div v-if="postsError" class="error-message">
-            <i class="error-icon">!</i>
-            <p>{{ postsError }}</p>
-          </div>
-          
-          <!-- 从第二个帖子开始展示posts数据 -->
-          <div @click="handlePostClick(post.id)" v-for="post in userPosts" :key="post.id" class="post-item">
-            <div class="user-info">
-              <img @click.stop="goToUserProfile(post.user ? post.user.id : userId)" :src="post.user ? post.user.imageUrl : userProfile.imageUrl" alt="用户头像" class="avatar" style="cursor: pointer">
-              <span @click.stop="goToUserProfile(post.user ? post.user.id : userId)" class="username" style="cursor: pointer">{{ post.user ? post.user.username : userProfile.username }}</span>
-            </div>
-            <h2 class="post-title">{{ truncateTitle(post.title) }}</h2>
-            <p class="post-content">{{ truncateContent(post.content) }}</p>
-            <div v-if="post.imageUrl" class="post-image" :class="{ 'multiple-images': post.imageUrl.length > 1 }">
-              <template v-if="post.imageUrl.length === 1">
-                <img :src="post.imageUrl[0]" alt="帖子图片" class="single-image">
-              </template>
-              <template v-else>
-                <div v-for="(img, index) in post.imageUrl.slice(0, 3)" :key="index" style="position: relative;">
-                  <img :src="img" alt="帖子图片">
-                  <span v-if="index === 2 && post.imageUrl.length > 3" class="image-count">
-                    {{ post.imageUrl.length }}张
-                  </span>
-                </div>
-              </template>
-            </div>
-            <div class="sectionname">{{ post.section.sectionName }}</div>
-            <div class="post-meta">
-              <span class="post-time">{{ formatDate(post.postDate) }}</span>
-              <div class="interaction">
-                <span class="likes">👍 {{ post.likesCount }}</span>
-                <span class="comments">💬 {{ post.commentsCount }}</span>
+            <!-- 添加切换选项卡 -->
+            <div class="post-tabs">
+              <div 
+                class="post-tab" 
+                :class="{ 'active': activeTab === 'posts' }" 
+                @click="switchTab('posts')"
+              >
+                用户发布的帖子
+              </div>
+              <div 
+                class="post-tab" 
+                :class="{ 'active': activeTab === 'favorites' }" 
+                @click="switchTab('favorites')"
+              >
+                用户收藏的帖子
               </div>
             </div>
           </div>
           
-          <!-- 加载更多按钮 -->
-          <div v-if="hasMorePosts && !isLoading" class="load-more-container">
-            <button @click="loadMorePosts" class="load-more-button">加载更多</button>
+          <!-- 没有帖子时的提示 - 根据当前标签页显示不同提示 -->
+          <div v-if="(activeTab === 'posts' && userPosts.length === 0 && !postsError) || 
+                     (activeTab === 'favorites' && userFavorites.length === 0 && !favoritesError)" 
+               class="no-posts">
+            {{ activeTab === 'posts' ? '该用户暂未发布任何帖子' : '该用户暂未收藏任何帖子' }}
           </div>
           
-          <!-- 加载中提示 -->
-          <div v-if="isLoading" class="loading-indicator">
+          <!-- 帖子获取错误提示 - 根据当前标签页显示不同错误 -->
+          <div v-if="(activeTab === 'posts' && postsError) || 
+                     (activeTab === 'favorites' && favoritesError)" 
+               class="error-message">
+            <i class="error-icon">!</i>
+            <p>{{ activeTab === 'posts' ? postsError : favoritesError }}</p>
+          </div>
+          
+          <!-- 用户发布的帖子 -->
+          <template v-if="activeTab === 'posts'">
+            <div @click="handlePostClick(post.id)" v-for="post in userPosts" :key="post.id" class="post-item">
+              <div class="user-info">
+                <img @click.stop="goToUserProfile(post.user ? post.user.id : userId)" :src="post.user ? post.user.imageUrl : userProfile.imageUrl" alt="用户头像" class="avatar" style="cursor: pointer">
+                <span @click.stop="goToUserProfile(post.user ? post.user.id : userId)" class="username" style="cursor: pointer">{{ post.user ? post.user.username : userProfile.username }}</span>
+              </div>
+              <h2 class="post-title">{{ truncateTitle(post.title) }}</h2>
+              <p class="post-content">{{ truncateContent(post.content) }}</p>
+              <div v-if="post.imageUrl" class="post-image" :class="{ 'multiple-images': post.imageUrl.length > 1 }">
+                <template v-if="post.imageUrl.length === 1">
+                  <img :src="post.imageUrl[0]" alt="帖子图片" class="single-image">
+                </template>
+                <template v-else>
+                  <div v-for="(img, index) in post.imageUrl.slice(0, 3)" :key="index" style="position: relative;">
+                    <img :src="img" alt="帖子图片">
+                    <span v-if="index === 2 && post.imageUrl.length > 3" class="image-count">
+                      {{ post.imageUrl.length }}张
+                    </span>
+                  </div>
+                </template>
+              </div>
+              <div class="sectionname">{{ post.section.sectionName }}</div>
+              <div class="post-meta">
+                <span class="post-time">{{ formatDate(post.postDate) }}</span>
+                <div class="interaction">
+                  <span class="likes">👍 {{ post.likesCount }}</span>
+                  <span class="comments">💬 {{ post.commentsCount }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+          
+          <!-- 用户收藏的帖子 -->
+          <template v-if="activeTab === 'favorites'">
+            <div @click="handlePostClick(post.id)" v-for="post in userFavorites" :key="post.id" class="post-item">
+              <div class="user-info">
+                <img @click.stop="goToUserProfile(post.user ? post.user.id : post.userId)" 
+                     :src="post.user ? post.user.imageUrl : 'https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png'" 
+                     alt="用户头像" 
+                     class="avatar" 
+                     style="cursor: pointer">
+                <span @click.stop="goToUserProfile(post.user ? post.user.id : post.userId)" 
+                      class="username" 
+                      style="cursor: pointer">{{ post.user ? post.user.username : '用户已不存在' }}</span>
+              </div>
+              <h2 class="post-title">{{ truncateTitle(post.title) }}</h2>
+              <p class="post-content">{{ truncateContent(post.content) }}</p>
+              <div v-if="post.imageUrl && post.imageUrl.length" class="post-image" :class="{ 'multiple-images': post.imageUrl.length > 1 }">
+                <template v-if="post.imageUrl.length === 1">
+                  <img :src="post.imageUrl[0]" alt="帖子图片" class="single-image">
+                </template>
+                <template v-else>
+                  <div v-for="(img, index) in post.imageUrl.slice(0, 3)" :key="index" style="position: relative;">
+                    <img :src="img" alt="帖子图片">
+                    <span v-if="index === 2 && post.imageUrl.length > 3" class="image-count">
+                      {{ post.imageUrl.length }}张
+                    </span>
+                  </div>
+                </template>
+              </div>
+              <div class="sectionname">{{ post.section ? post.section.sectionName : '未分类' }}</div>
+              <div class="post-meta">
+                <span class="post-time">{{ formatDate(post.postDate) }}</span>
+                <div class="interaction">
+                  <span class="likes">👍 {{ post.likesCount }}</span>
+                  <span class="comments">💬 {{ post.commentsCount }}</span>
+                  <span class="favorite-time">收藏于 {{ formatDate(post.favoriteDate || post.postDate) }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+          
+          <!-- 加载更多按钮 - 根据当前标签页显示不同的加载按钮 -->
+          <div v-if="(activeTab === 'posts' && hasMorePosts && !isLoading) || 
+                     (activeTab === 'favorites' && hasMoreFavorites && !isLoadingFavorites)" 
+               class="load-more-container">
+            <button 
+              @click="activeTab === 'posts' ? loadMorePosts() : loadMoreFavorites()" 
+              class="load-more-button"
+            >
+              加载更多
+            </button>
+          </div>
+          
+          <!-- 加载中提示 - 根据当前标签页显示不同的加载提示 -->
+          <div v-if="(activeTab === 'posts' && isLoading) || 
+                     (activeTab === 'favorites' && isLoadingFavorites)" 
+               class="loading-indicator">
             加载中...
           </div>
           
-          <!-- 全部加载完毕提示 -->
-          <div v-if="!hasMorePosts && userPosts.length > 0" class="all-loaded-message">
+          <!-- 全部加载完毕提示 - 根据当前标签页显示不同的提示 -->
+          <div v-if="(activeTab === 'posts' && !hasMorePosts && userPosts.length > 0) || 
+                     (activeTab === 'favorites' && !hasMoreFavorites && userFavorites.length > 0)" 
+               class="all-loaded-message">
             已加载全部内容
           </div>
          
@@ -261,15 +334,21 @@ export default defineComponent({
     const userId = ref(route.params.userId || (authStore.isLoggedIn ? authStore.userInfo.id : null));
     const userProfile = ref({});
     const userPosts = ref([]);
+    const userFavorites = ref([]); // 添加用户收藏帖子数组
     const followers = ref(0);
     const following = ref(0);
     const currentPage = ref(1);
+    const currentFavoritePage = ref(1); // 添加收藏页码
     const hasMorePosts = ref(true);
+    const hasMoreFavorites = ref(true); // 添加收藏是否有更多
     const isLoading = ref(false);
+    const isLoadingFavorites = ref(false); // 添加收藏加载状态
     const isFollowing = ref(false);
     const showLoginPopup = ref(false);
     const profileError = ref('');
     const postsError = ref('');
+    const favoritesError = ref(''); // 添加收藏错误信息
+    const activeTab = ref('posts'); // 添加当前活动标签页
     
     // UI 相关
     const canScrollLeft = ref(false);
@@ -875,6 +954,83 @@ export default defineComponent({
       zoomValue.value = newZoom;
     };
 
+    // 切换标签页
+    const switchTab = (tab) => {
+      if (activeTab.value === tab) return;
+      
+      activeTab.value = tab;
+      
+      if (tab === 'favorites' && userFavorites.value.length === 0) {
+        // 首次切换到收藏标签时加载数据
+        fetchUserFavorites();
+      }
+    };
+    
+    // 获取用户收藏的帖子
+    const fetchUserFavorites = async (reset = true) => {
+      try {
+        isLoadingFavorites.value = true;
+        favoritesError.value = ''; // 清除先前的错误
+        
+        if (reset) {
+          userFavorites.value = [];
+          currentFavoritePage.value = 1;
+          hasMoreFavorites.value = true;
+        }
+        
+        const jwtToken = sessionStorage.getItem('jwtToken') || localStorage.getItem('jwtToken');
+        const config = {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`
+          },
+          params: {
+            userId: userId.value,
+            pageNum: currentFavoritePage.value,
+            pageSize: 5
+          }
+        };
+        
+        const response = await axios.get('http://localhost:7070/api/favorites/by-user', config);
+        console.log('收藏的帖子API响应:', response.data);
+        
+        // 处理API响应数据
+        let responseData = response.data;
+        // 如果响应包含嵌套的data对象且有records字段
+        if (responseData.data && responseData.data.records) {
+          responseData = responseData.data;
+        }
+        
+        const newFavorites = responseData.records || [];
+        console.log('处理后的收藏帖子:', newFavorites);
+        
+        if (reset) {
+          userFavorites.value = newFavorites;
+        } else {
+          userFavorites.value = [...userFavorites.value, ...newFavorites];
+        }
+        
+        // 判断是否还有更多收藏
+        if (responseData.pages) {
+          hasMoreFavorites.value = currentFavoritePage.value < responseData.pages;
+        } else {
+          hasMoreFavorites.value = newFavorites.length >= 5;
+        }
+      } catch (error) {
+        console.error('获取用户收藏失败:', error);
+        favoritesError.value = '获取用户收藏失败，请稍后再试';
+      } finally {
+        isLoadingFavorites.value = false;
+      }
+    };
+    
+    // 加载更多收藏
+    const loadMoreFavorites = async () => {
+      if (isLoadingFavorites.value || !hasMoreFavorites.value) return;
+      
+      currentFavoritePage.value++;
+      await fetchUserFavorites(false);
+    };
+
     // 监听路由参数变化
     watch(() => route.params.userId, (newUserId) => {
       if (newUserId && newUserId !== userId.value) {
@@ -882,6 +1038,14 @@ export default defineComponent({
         // 重新加载用户数据
         fetchUserProfile();
         fetchUserPosts();
+        
+        // 重置收藏相关状态
+        userFavorites.value = [];
+        currentFavoritePage.value = 1;
+        hasMoreFavorites.value = true;
+        
+        // 重置为默认标签页
+        activeTab.value = 'posts';
       }
     });
 
@@ -925,19 +1089,26 @@ export default defineComponent({
       userId,
       userProfile,
       userPosts,
+      userFavorites, // 添加收藏数据
+      activeTab, // 添加当前标签
       followers,
       following,
       isCurrentUser,
       isFollowing,
       isLoading,
+      isLoadingFavorites, // 添加收藏加载状态
       hasMorePosts,
+      hasMoreFavorites, // 添加收藏是否有更多
       profileError,
       postsError,
+      favoritesError, // 添加收藏错误信息
       canScrollLeft,
       canScrollRight,
       handlePostClick,
       goToUserProfile,
       loadMorePosts,
+      loadMoreFavorites, // 添加加载更多收藏
+      switchTab, // 添加切换标签方法
       toggleFollow,
       sendMessage,
       formatDate,
@@ -1663,16 +1834,54 @@ main {
 
 /* 确保个人中心 .post-item 样式与截断兼容 */
 .post-item:not(:first-child) {
-  /* 可能需要调整 height 或移除固定 height */
-  /* height: auto; */ 
   position: relative;
   padding-top: 50px; /* 保持原有内边距 */
   padding-bottom: 50px; /* 增加底部内边距以容纳元数据 */
 }
 
-/* 调整内容 P 标签的样式，避免与截断冲突 */
-.post-item:not(:first-child) p.post-content {
-  /* 移除或调整可能存在的固定 margin-bottom */
-  /* margin-bottom: 10px; */ 
+/* 添加标签页样式 */
+.post-tabs {
+  display: flex;
+  border-bottom: 1px solid #eaeaea;
+  margin-bottom: 15px;
+}
+
+.post-tab {
+  padding: 10px 15px;
+  cursor: pointer;
+  font-size: 15px;
+  color: #606266;
+  transition: all 0.3s;
+  position: relative;
+}
+
+.post-tab:hover {
+  color: #409EFF;
+}
+
+.post-tab.active {
+  color: #409EFF;
+  font-weight: 500;
+}
+
+.post-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: #409EFF;
+}
+
+.post-section-title h3 {
+  display: none; /* 隐藏原有标题 */
+}
+
+/* 收藏时间样式 */
+.favorite-time {
+  font-size: 12px;
+  color: #999;
+  margin-left: 15px;
 }
 </style>    
