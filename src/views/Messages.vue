@@ -156,14 +156,27 @@
                         <el-image 
                           :src="message.attachment?.url || message.attachmentUrl" 
                           :preview-src-list="[message.attachment?.url || message.attachmentUrl]"
-                          fit="cover">
+                          :initial-index="0"
+                          fit="cover"
+                          preview-teleported
+                          hide-on-click-modal>
                         </el-image>
+                        <a :href="message.attachment?.url || message.attachmentUrl" 
+                           download 
+                           class="image-download-button"
+                           @click.stop>
+                          <el-icon><Download /></el-icon>
+                        </a>
                       </div>
                       <div v-else class="message-file">
-                        <i class="el-icon-document"></i>
+                        <el-icon><Document /></el-icon>
                         <span class="file-name">{{ message.attachment?.name || message.attachmentName }}</span>
-                        <a :href="message.attachment?.url || message.attachmentUrl" target="_blank" class="file-download">
-                          <i class="el-icon-download"></i>
+                        <a :href="message.attachment?.url || message.attachmentUrl" 
+                           download 
+                           class="file-download-button"
+                           @click.stop
+                           title="下载文件">
+                          <el-icon><Download /></el-icon>
                         </a>
                       </div>
                     </template>
@@ -273,7 +286,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useAuthStore } from '../stores/auth.js';
 import { useRouter, useRoute } from 'vue-router';
 import axios from 'axios';
-import { Message, Document, Picture, Close, Star, Check, RefreshRight, Loading, Delete } from '@element-plus/icons-vue';
+import { Message, Document, Picture, Close, Star, Check, RefreshRight, Loading, Delete, Download } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { eventBus } from '@/plugins/eventBus';
 
@@ -3078,7 +3091,7 @@ main {
 .message-file {
   display: flex;
   align-items: center;
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(255, 255, 255, 0.185);
   padding: 8px 12px;
   border-radius: 8px;
   margin-top: 5px;
@@ -3101,7 +3114,7 @@ main {
 }
 
 .sent .message-file {
-  background-color: rgba(255, 255, 255, 0.9);
+  background-color: rgb(60 57 98 / 80%);
 }
 
 .empty-state, .empty-chat, .empty-messages {
@@ -3763,5 +3776,202 @@ main {
     position: absolute;
     bottom: 5px;
     right: 5px;
+}
+
+/* 消息气泡中图片样式调整 */
+.message-image {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  max-width: 300px;
+  margin-bottom: 5px;
+}
+
+.message-image .el-image {
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  display: block;
+}
+
+/* 图片下载按钮 */
+.image-download-button {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 32px;
+  height: 32px;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 2;
+}
+
+.message-image:hover .image-download-button {
+  opacity: 1;
+}
+
+/* 让系统消息居中显示 */
+.system-message {
+  background-color: rgba(0, 0, 0, 0.1);
+  padding: 10px 20px;
+  border-radius: 20px;
+  color: #666;
+  text-align: center;
+  font-size: 13px;
+  max-width: 100%;
+}
+
+/* 发送失败的消息样式 */
+.message-bubble.failed {
+  position: relative;
+  opacity: 0.8;
+  border: 1px solid rgba(255, 0, 0, 0.3);
+}
+
+/* Element Plus全局样式覆盖 - 修复图片预览 */
+:deep(.el-image-viewer__wrapper) {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 9999 !important;
+}
+
+:deep(.el-image-viewer__mask) {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  opacity: 0.9;
+  background: #000;
+  z-index: 9990;
+}
+
+:deep(.el-image-viewer__close) {
+  right: 40px;
+  top: 40px;
+  width: 44px;
+  height: 44px;
+  font-size: 36px;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  border-radius: 50%;
+}
+
+:deep(.el-image-viewer__actions) {
+  opacity: 0.9;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  width: 282px;
+  border-radius: 22px;
+  padding: 8px 0;
+}
+
+/* 修复消息显示类名逻辑，确保自己的消息显示正确 */
+.message-item.sent {
+  align-self: flex-end !important;
+  margin-right: 10px !important;
+}
+
+.message-item.sent .message-bubble {
+  background-color: #409eff !important;
+  color: white !important;
+  border-bottom-right-radius: 4px;
+  background-image: linear-gradient(135deg, #409eff 0%, #50b7ff 100%) !important;
+}
+
+.message-item.received {
+  align-self: flex-start !important;
+  margin-left: 10px !important;
+}
+
+.message-item.received .message-bubble {
+  background-color: white !important;
+  color: #333 !important;
+  border-bottom-left-radius: 4px;
+  border: 1px solid #eaedf3 !important;
+}
+
+/* 时间样式调整 */
+.message-item.sent .message-time {
+  text-align: right !important;
+}
+
+.message-item.received .message-time {
+  text-align: left !important;
+}
+
+/* 文件消息样式改进 */
+.message-file {
+  display: flex;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.05);
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin-bottom: 5px;
+  position: relative;
+  max-width: 300px;
+}
+
+.message-file .el-icon {
+  font-size: 24px;
+  color: #409eff;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.file-name {
+  flex: 1;
+  font-size: 14px;
+  word-break: break-word;
+  margin-right: 10px;
+  color: #333;
+}
+
+.file-download-button {
+  background-color: #409eff;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.file-download-button .el-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  font-size: 16px;
+}
+
+.file-download-button:hover {
+  background-color: #337ecc;
+  transform: scale(1.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.sent .message-file {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.sent .file-name {
+  color: white;
 }
 </style> 
