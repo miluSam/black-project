@@ -778,6 +778,21 @@ const handleFileUpload = async (event) => {
     return;
   }
   
+  // 检查是否有选中的会话
+  if (!selectedConversation.value) {
+    ElMessage.warning('请先选择一个对话再上传文件');
+    event.target.value = ''; // 清空文件输入
+    return;
+  }
+  
+  // 获取接收者ID
+  const receiverId = selectedConversation.value?.userId || selectedConversation.value?.otherUserId;
+  if (!receiverId) {
+    ElMessage.warning('无法确定接收者，请重新选择对话');
+    event.target.value = ''; // 清空文件输入
+    return;
+  }
+  
   // 显示上传前预览
   attachmentPreview.value = {
     show: true,
@@ -794,9 +809,14 @@ const handleFileUpload = async (event) => {
     // 开始上传文件
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('receiverId', receiverId.toString()); // 添加接收者ID
+    
+    if (newMessage.value.trim()) {
+      formData.append('content', newMessage.value.trim()); // 可选消息内容
+    }
     
     const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-    const response = await axios.post('http://localhost:7070/api/upload', formData, {
+    const response = await axios.post('http://localhost:7070/api/messages/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
         'Authorization': `Bearer ${jwtToken}`
@@ -804,9 +824,10 @@ const handleFileUpload = async (event) => {
     });
     
     if (response.status === 200) {
+      console.log('文件上传成功:', response.data);
       // 更新预览信息为上传后的URL
-      attachmentPreview.value.url = response.data.url;
-      attachmentPreview.value.name = response.data.name || file.name;
+      attachmentPreview.value.url = response.data.url || response.data.attachmentUrl;
+      attachmentPreview.value.name = response.data.name || response.data.attachmentName || file.name;
       attachmentPreview.value.type = response.data.type || 'file';
     }
   } catch (error) {
@@ -817,13 +838,37 @@ const handleFileUpload = async (event) => {
 };
 
 // 处理图片上传
-const handleImageUpload = (event) => {
+const handleImageUpload = async (event) => {
   const file = event.target.files[0];
   if (!file) return;
+  
+  // 文件大小限制 (10MB)
+  const maxSize = 10 * 1024 * 1024;
+  if (file.size > maxSize) {
+    ElMessage.error('图片大小不能超过10MB');
+    event.target.value = ''; // 清空文件输入
+    return;
+  }
+  
+  // 检查是否有选中的会话
+  if (!selectedConversation.value) {
+    ElMessage.warning('请先选择一个对话再上传图片');
+    event.target.value = ''; // 清空文件输入
+    return;
+  }
+  
+  // 获取接收者ID
+  const receiverId = selectedConversation.value?.userId || selectedConversation.value?.otherUserId;
+  if (!receiverId) {
+    ElMessage.warning('无法确定接收者，请重新选择对话');
+    event.target.value = ''; // 清空文件输入
+    return;
+  }
   
   // 创建预览URL
   const previewUrl = URL.createObjectURL(file);
   
+  // 先显示本地预览
   attachmentPreview.value = {
     show: true,
     type: 'image',
@@ -834,6 +879,40 @@ const handleImageUpload = (event) => {
   
   // 重置文件输入，允许选择相同图片
   event.target.value = '';
+  
+  try {
+    // 开始上传图片
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('receiverId', receiverId.toString()); // 添加接收者ID
+    
+    if (newMessage.value.trim()) {
+      formData.append('content', newMessage.value.trim()); // 可选消息内容
+    }
+    
+    const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
+    const response = await axios.post('http://localhost:7070/api/messages/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${jwtToken}`
+      }
+    });
+    
+    if (response.status === 200) {
+      console.log('图片上传成功:', response.data);
+      // 用服务器URL替换本地预览URL
+      URL.revokeObjectURL(previewUrl); // 释放本地预览URL
+      
+      // 更新预览信息为上传后的URL
+      attachmentPreview.value.url = response.data.url || response.data.attachmentUrl;
+      attachmentPreview.value.name = response.data.name || response.data.attachmentName || file.name;
+      // 保持type为image
+    }
+  } catch (error) {
+    console.error('图片上传失败:', error);
+    ElMessage.error('图片上传失败，请重试');
+    removeAttachment();
+  }
 };
 
 // 移除附件
