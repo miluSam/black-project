@@ -311,13 +311,13 @@ export default defineComponent({
         };
         
         // 获取特定分区的帖子数据
-        const postsResponse = await axios.get('http://localhost:7070/api/posts/filter', config);
+        const postsResponse = await axios.get('/api/posts/filter', config);
         const pageData = postsResponse.data;
         const newPosts = pageData.records || [];
         
         // 获取分区数据（只在第一次加载时获取）
         if (reset || sections.value.length === 0) {
-          const sectionsResponse = await axios.get('http://localhost:7070/api/sections', config);
+          const sectionsResponse = await axios.get('/api/sections', config);
           sections.value = sectionsResponse.data;
         }
         
@@ -398,7 +398,7 @@ export default defineComponent({
         };
         
         // 获取搜索结果
-        const postsResponse = await axios.get('http://localhost:7070/api/posts/search', config);
+        const postsResponse = await axios.get('/api/posts/search', config);
         const pageData = postsResponse.data;
         const newPosts = pageData.records || [];
         
@@ -654,13 +654,13 @@ export default defineComponent({
         };
         
         // 获取帖子数据
-        const postsResponse = await axios.get('http://localhost:7070/api/posts/page', config);
+        const postsResponse = await axios.get('/api/posts/page', config);
         const pageData = postsResponse.data;
         const newPosts = pageData.records || [];
         
         // 获取分区数据（只在第一次加载时获取）
         if (reset || sections.value.length === 0) {
-          const sectionsResponse = await axios.get('http://localhost:7070/api/sections', config);
+          const sectionsResponse = await axios.get('/api/sections', config);
           sections.value = sectionsResponse.data;
         }
         

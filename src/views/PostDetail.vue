@@ -249,7 +249,7 @@ export default defineComponent({
         }
         
         // 发送浏览记录到后端
-        await axios.post(`http://localhost:7070/api/posts/${post.value.id}/view`, {
+        await axios.post(`/api/posts/${post.value.id}/view`, {
           deviceInfo,
           sessionId,
           ipAddress: '127.0.0.1' // 实际使用中可能由后端自动提取
@@ -280,7 +280,7 @@ export default defineComponent({
         }
         
         // 发送退出记录到后端
-        await axios.post(`http://localhost:7070/api/posts/${post.value.id}/exit`, {
+        await axios.post(`/api/posts/${post.value.id}/exit`, {
           deviceInfo,
           sessionId, // 包含会话ID以便后端匹配记录
           ipAddress: '127.0.0.1' // 实际使用中可能由后端自动提取

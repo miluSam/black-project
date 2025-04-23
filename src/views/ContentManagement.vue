@@ -530,7 +530,7 @@ export default defineComponent({
       
       try {
         const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-        const response = await axios.get('http://localhost:7070/api/posts/by-user', {
+        const response = await axios.get('/api/posts/by-user', {
           headers: {
             'Authorization': `Bearer ${jwtToken}`
           },
@@ -575,7 +575,7 @@ export default defineComponent({
       
       try {
         const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-        const response = await axios.get(`http://localhost:7070/api/posts/${postId}/analytics`, {
+        const response = await axios.get(`/api/posts/${postId}/analytics`, {
           headers: {
             'Authorization': `Bearer ${jwtToken}`
           }
@@ -766,7 +766,7 @@ export default defineComponent({
     const deletePost = async (postId) => {
       try {
         const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-        await axios.delete(`http://localhost:7070/api/posts/${postId}`, {
+        await axios.delete(`/api/posts/${postId}`, {
           headers: {
             'Authorization': `Bearer ${jwtToken}`
           }

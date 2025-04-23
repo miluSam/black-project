@@ -428,17 +428,17 @@ export default defineComponent({
           }
         };
         
-        const response = await axios.get(`http://localhost:7070/api/users/${userId.value}`, config);
+        const response = await axios.get(`/api/users/${userId.value}`, config);
         userProfile.value = response.data;
         
         // 获取关注和粉丝数量
-        const statsResponse = await axios.get(`http://localhost:7070/api/users/${userId.value}/stats`, config);
+        const statsResponse = await axios.get(`/api/users/${userId.value}/stats`, config);
         followers.value = statsResponse.data.followers || 0;
         following.value = statsResponse.data.following || 0;
         
         // 检查当前用户是否已关注该用户
         if (authStore.isLoggedIn && !isCurrentUser.value) {
-          const followResponse = await axios.get(`http://localhost:7070/api/users/follow/check/${userId.value}`, config);
+          const followResponse = await axios.get(`/api/users/follow/check/${userId.value}`, config);
           isFollowing.value = followResponse.data.following;
         }
       } catch (error) {
@@ -471,7 +471,7 @@ export default defineComponent({
           }
         };
         
-        const response = await axios.get('http://localhost:7070/api/posts/by-user', config);
+        const response = await axios.get('/api/posts/by-user', config);
         const pageData = response.data;
         const newPosts = pageData.records || [];
         
@@ -517,10 +517,10 @@ export default defineComponent({
         };
         
         if (isFollowing.value) {
-          await axios.post(`http://localhost:7070/api/users/unfollow/${userId.value}`, {}, config);
+          await axios.post(`/api/users/unfollow/${userId.value}`, {}, config);
           followers.value--;
         } else {
-          await axios.post(`http://localhost:7070/api/users/follow/${userId.value}`, {}, config);
+          await axios.post(`/api/users/follow/${userId.value}`, {}, config);
           followers.value++;
         }
         
@@ -830,7 +830,7 @@ export default defineComponent({
           
           // 上传图片并获取URL
           const uploadResponse = await axios.post(
-            `http://localhost:7070/api/users/upload-avatar`,
+            `/api/users/upload-avatar`,
             formData,
             imageUploadConfig
           );
@@ -848,7 +848,7 @@ export default defineComponent({
         
         // 调用更新接口
         await axios.put(
-          `http://localhost:7070/api/users/${userId.value}/profile`, 
+          `/api/users/${userId.value}/profile`, 
           updateData,
           {
             headers: {
@@ -990,7 +990,7 @@ export default defineComponent({
           }
         };
         
-        const response = await axios.get('http://localhost:7070/api/favorites/by-user', config);
+        const response = await axios.get('/api/favorites/by-user', config);
         console.log('收藏的帖子API响应:', response.data);
         
         // 处理API响应数据

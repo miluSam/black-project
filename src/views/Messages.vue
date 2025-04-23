@@ -350,7 +350,7 @@ const loadConversations = async () => {
     if (!authStore.isLoggedIn) return;
     
     const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-    const response = await axios.get('http://localhost:7070/api/messages/conversations', {
+    const response = await axios.get('/api/messages/conversations', {
       headers: {
         'Authorization': `Bearer ${jwtToken}`
       }
@@ -480,7 +480,7 @@ const loadContacts = async () => {
     
     const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
     // 使用 /api/users/contacts 作为主要API端点
-    const response = await axios.get('http://localhost:7070/api/users/contacts', {
+    const response = await axios.get('/api/users/contacts', {
       headers: {
         'Authorization': `Bearer ${jwtToken}`
       }
@@ -519,7 +519,7 @@ const loadContacts = async () => {
     try {
       const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
       // 尝试第二个可能的端点
-      const response = await axios.get('http://localhost:7070/api/messages/contacts', {
+      const response = await axios.get('/api/messages/contacts', {
         headers: {
           'Authorization': `Bearer ${jwtToken}`
         }
@@ -549,7 +549,7 @@ const loadContacts = async () => {
       // 尝试第三个可能的端点 - 获取所有用户
       try {
         const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-        const response = await axios.get('http://localhost:7070/api/users/all', {
+        const response = await axios.get('/api/users/all', {
           headers: {
             'Authorization': `Bearer ${jwtToken}`
           }
@@ -617,7 +617,7 @@ const selectConversation = async (conversation) => {
         console.error('标记会话已读失败：无法确定对方用户ID', conversation);
         return; 
       }
-      await axios.put(`http://localhost:7070/api/messages/conversations/${otherUserId}/read`, {}, {
+      await axios.put(`/api/messages/conversations/${otherUserId}/read`, {}, {
       // --- 修改结束 ---
         headers: {
           'Authorization': `Bearer ${jwtToken}`
@@ -686,7 +686,7 @@ const loadMessages = async (conversationId) => {
     // 确定使用哪个ID调用API
     // 如果是标准会话ID(数字)，使用/messages/会话ID
     // 如果是用户ID，使用/messages/用户ID
-    const apiEndpoint = `http://localhost:7070/api/messages/${targetUserId}`;
+    const apiEndpoint = `/api/messages/${targetUserId}`;
     
     console.log('使用API端点:', apiEndpoint);
     
@@ -829,7 +829,7 @@ const handleFileUpload = async (event) => {
     }
     
     const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-    const response = await axios.post('http://localhost:7070/api/messages/upload', formData, {
+    const response = await axios.post('/api/messages/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
         'Authorization': `Bearer ${jwtToken}`
@@ -904,7 +904,7 @@ const handleImageUpload = async (event) => {
     }
     
     const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-    const response = await axios.post('http://localhost:7070/api/messages/upload', formData, {
+    const response = await axios.post('/api/messages/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
         'Authorization': `Bearer ${jwtToken}`
@@ -1079,7 +1079,7 @@ const sendMessage = async () => {
     
     // 发送消息到服务器
     console.log('发送消息数据:', messageData);
-    const response = await axios.post('http://localhost:7070/api/messages/send', messageData, {
+    const response = await axios.post('/api/messages/send', messageData, {
       headers: {
         'Authorization': `Bearer ${jwtToken}`
       }
@@ -1203,14 +1203,14 @@ const retryMessage = async (message) => {
     let response;
     
     if (formData) {
-      response = await axios.post('http://localhost:7070/api/messages/upload', formData, {
+      response = await axios.post('/api/messages/upload', formData, {
         headers: {
           'Authorization': `Bearer ${jwtToken}`,
           'Content-Type': 'multipart/form-data'
         }
       });
     } else {
-      response = await axios.post('http://localhost:7070/api/messages/send', messageData, {
+      response = await axios.post('/api/messages/send', messageData, {
         headers: {
           'Authorization': `Bearer ${jwtToken}`
         }
@@ -1466,7 +1466,7 @@ const deleteConversation = async (conversation) => {
       console.log(`准备删除会话，使用的目标用户ID: ${targetId} (来自 otherUserId 或 userId)`);
       const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
       // 确认 API 端点使用推断出的对方用户 ID
-      await axios.delete(`http://localhost:7070/api/messages/conversations/${targetId}`, {
+      await axios.delete(`/api/messages/conversations/${targetId}`, {
         headers: {
           'Authorization': `Bearer ${jwtToken}`
         }
@@ -1510,7 +1510,7 @@ const loadAllContacts = async () => {
     
     const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
     // 使用与loadContacts相同的API
-    const response = await axios.get('http://localhost:7070/api/users/contacts', {
+    const response = await axios.get('/api/users/contacts', {
       headers: {
         'Authorization': `Bearer ${jwtToken}`
       }
@@ -1575,7 +1575,7 @@ const createNewConversation = async (userId) => {
   try {
     // 先尝试通过API获取完整的用户信息
     const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-    const response = await axios.get(`http://localhost:7070/api/users/${userId}`, {
+    const response = await axios.get(`/api/users/${userId}`, {
       headers: {
         'Authorization': `Bearer ${jwtToken}`
       }
@@ -2133,7 +2133,7 @@ const loadLatestMessages = async () => {
     
     // 构建API请求，使用用户ID作为会话标识
     const response = await axios.get(
-      `http://localhost:7070/api/messages/${targetUserId}/latest`, 
+      `/api/messages/${targetUserId}/latest`, 
       {
         headers: { 'Authorization': `Bearer ${jwtToken}` },
         params: { 
@@ -2256,7 +2256,7 @@ const markAsRead = async (conversation) => {
         console.error('轮询中标记会话已读失败：无法确定对方用户ID', conversation);
         return; 
     }
-    const endpoint = `http://localhost:7070/api/messages/conversations/${otherUserId}/read`;
+    const endpoint = `/api/messages/conversations/${otherUserId}/read`;
     // --- 修改结束 ---
     
     await axios.put(endpoint, {}, {
