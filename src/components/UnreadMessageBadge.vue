@@ -15,7 +15,16 @@ let intervalId = null;
 const fetchUnreadCount = async () => {
   try {
     const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
-    const response = await axios.get('http://localhost:7070/api/messages/conversations', {
+    
+    // Debug token existence
+    if (!jwtToken) {
+      console.warn('JWT token not found in storage');
+      return;
+    }
+    
+    console.log('Token exists, making API request');
+    
+    const response = await axios.get('/api/messages/conversations', {
       headers: {
         'Authorization': `Bearer ${jwtToken}`
       }
@@ -27,6 +36,10 @@ const fetchUnreadCount = async () => {
     }
   } catch (error) {
     console.error('获取未读消息数失败:', error);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
   }
 };
 
