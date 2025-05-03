@@ -48,6 +48,12 @@
           </div>
           <!-- 从第二个帖子开始展示posts数据 -->
           <div @click="handlePostClick(post.id)" v-for="post in displayedPosts" :key="post.id" class="post-item">
+            <div v-if="isAdmin" class="admin-menu">
+              <span class="menu-icon" @click.stop="toggleMenu(post.id)">⋮</span>
+              <div v-if="openMenuPostId === post.id" class="menu-dropdown" @click.stop>
+                <div class="dropdown-item" @click="openDeleteDialog(post.id)">删除帖子</div>
+              </div>
+            </div>
             <div class="user-info">
               <img @click.stop="goToUserProfile(post.user.id)" :src="post.user.imageUrl" alt="用户头像" class="avatar" style="cursor: pointer">
               <span @click.stop="goToUserProfile(post.user.id)" class="username" style="cursor: pointer">{{ post.user.username }}</span>
@@ -101,6 +107,17 @@
       />
     </main>
 
+    <!-- 删除原因对话框 -->
+    <div v-if="showDeleteDialog" class="delete-modal-overlay" @click.self="cancelDelete">
+      <div class="delete-modal">
+        <h3>请输入删除原因</h3>
+        <textarea v-model="deleteReason" rows="4" placeholder="请输入原因..." class="delete-textarea"></textarea>
+        <div class="delete-buttons">
+          <button class="btn-cancel" @click="cancelDelete">取消</button>
+          <button class="btn-confirm" @click="executeDeletePost" :disabled="!deleteReason.trim()">确定</button>
+        </div>
+      </div>
+    </div>
 
     <router-view></router-view>
   </div>
@@ -728,7 +745,56 @@ export default defineComponent({
       return content.length > 50 ? content.substring(0, 50) + '...' : content;
     };
 
+    const isAdmin = computed(() =>
+      Array.isArray(authStore.userInfo.roles) &&
+      authStore.userInfo.roles.includes("ROLE_admin")
+    );
+
+    // 打开删除原因对话框
+    const showDeleteDialog = ref(false);
+    const deleteReason = ref('');
+    const deleteTargetPostId = ref(null);
+    const openDeleteDialog = (postId) => {
+      if (!isAdmin.value) return;
+      deleteTargetPostId.value = postId;
+      deleteReason.value = '';
+      showDeleteDialog.value = true;
+    };
+    // 执行删除并发送通知
+    const executeDeletePost = async () => {
+      const postId = deleteTargetPostId.value;
+      const reason = deleteReason.value.trim();
+      if (!postId || !reason) return;
+      const postItem = posts.value.find(p => p.id === postId) || {};
+      const recipientId = postItem.user?.id;
+      const title = postItem.title || '';
+      try {
+        const jwtToken = authStore.userInfo.token || sessionStorage.getItem('jwtToken') || localStorage.getItem('jwtToken');
+        await axios.delete(`/api/posts/${postId}`, { headers: { Authorization: `Bearer ${jwtToken}` }, data: { reason } });
+        if (recipientId) {
+          await axios.post('/api/messages/send', { recipientId, content: `您的帖子《${title}》已被管理员删除，原因：${reason}` }, { headers: { Authorization: `Bearer ${jwtToken}` } });
+        }
+        window.alert('帖子已删除，已通知作者');
+        fetchPosts();
+      } catch (error) {
+        console.error('删除帖子或发送通知失败:', error);
+        window.alert('操作失败，请稍后重试');
+      } finally {
+        showDeleteDialog.value = false;
+      }
+    };
+    const cancelDelete = () => {
+      showDeleteDialog.value = false;
+    };
+
+    // 管理员菜单切换控制
+    const openMenuPostId = ref(null);
+    const toggleMenu = (postId) => {
+      openMenuPostId.value = openMenuPostId.value === postId ? null : postId;
+    };
+
     return {
+      openDeleteDialog,
       isLoggedIn,
       authStore,
       posts,
@@ -761,7 +827,14 @@ export default defineComponent({
       selectedSection,
       searchKeyword,
       truncateTitle,
-      truncateContent
+      truncateContent,
+      isAdmin,
+      showDeleteDialog,
+      deleteReason,
+      executeDeletePost,
+      cancelDelete,
+      openMenuPostId,
+      toggleMenu
     };
   }
 });
@@ -887,6 +960,7 @@ main {
   border-radius: 8px;
   
   margin-bottom: 5px; /* 底部间距同步调整 */
+  position: relative;
 }
 .post-item:first-child {
   /* 增大高度 */
@@ -1014,6 +1088,7 @@ main {
   z-index: 5;
   display: none; /* 默认隐藏 */
   animation: arrowSlide 0.5s;
+  pointer-events: none;
 }
 
 .post-item:first-child::after {
@@ -1027,6 +1102,7 @@ main {
   z-index: 5;
   display: none; /* 默认隐藏 */
   animation: arrowSlideLeft 0.5s;
+  pointer-events: none;
 }
 
 /* 当可滚动时显示箭头 */
@@ -1336,5 +1412,106 @@ main {
   -webkit-box-orient: vertical;
   margin-bottom: 10px;
   line-height: 1.5;
+}
+
+.admin-menu {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.menu-icon {
+  cursor: pointer;
+  font-size: 20px;
+  color: #999;
+  user-select: none;
+}
+
+.menu-icon:hover {
+  color: #333;
+}
+
+/* 管理员菜单下拉 */
+.menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+  min-width: 120px;
+}
+
+.dropdown-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dropdown-item:hover {
+  background-color: #f5f5f5;
+}
+
+.delete-modal-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.delete-modal {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  width: 80%; max-width: 400px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.delete-modal h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.delete-textarea {
+  width: 100%;
+  resize: none;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.delete-buttons {
+  margin-top: 12px;
+  text-align: right;
+}
+
+.btn-cancel,
+.btn-confirm {
+  padding: 6px 12px;
+  margin-left: 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-cancel {
+  background: #f5f5f5;
+}
+
+.btn-confirm {
+  background: #409EFF;
+  color: #fff;
+}
+
+.btn-confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>    

@@ -107,6 +107,24 @@
       <button @click="showLoginPopup = true">登录</button>
     </div>
   </div>
+  <!-- 注册弹窗 -->
+  <div v-if="showRegisterPopup" class="register-popup-overlay">
+    <div class="register-popup-content">
+      <span class="close" @click="cancelRegister">&times;</span>
+      <h2>账号注册</h2>
+      <input v-model="regUsername" placeholder="用户名" />
+      <input type="password" v-model="regPassword" placeholder="密码" />
+      <input type="email" v-model="regEmail" placeholder="邮箱" />
+      <div v-if="regEmail && !isEmailValid" class="error-msg">请输入有效的邮箱地址</div>
+      <input type="tel" v-model="regPhoneNumber" placeholder="手机号" />
+      <div v-if="regPhoneNumber && !isPhoneValid" class="error-msg">请输入有效的手机号</div>
+      <div class="cf-turnstile" data-sitekey="0x4AAAAAABZax1N5QEqOLkei" data-callback="onTurnstileSuccess"></div>
+      <button @click="handleRegisterSubmit"
+              :disabled="!regUsername || !regPassword || !isEmailValid || !isPhoneValid || !regTurnstileToken">
+        注册
+      </button>
+    </div>
+  </div>
   </div>
   
 </template>
@@ -123,14 +141,31 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const showLoginPopup = ref(false)
+const showRegisterPopup = ref(false)
+const turnstileWidgetId = ref(null)
 const username = ref('')
 const password = ref('')
+const regUsername = ref('')
+const regPassword = ref('')
+const regEmail = ref('')
+const regPhoneNumber = ref('')
+const regTurnstileToken = ref('')
 const captchaImage = ref('')
 const captchaKey = ref('')
 const userCaptcha = ref('')
 const isCaptchaLoading = ref(false)
 const isDropdownVisible = ref(false)
 const searchQuery = ref('');
+
+// 验证邮箱格式
+const isEmailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail.value));
+// 验证手机号格式（中国手机号）
+const isPhoneValid = computed(() => /^1[3-9]\d{9}$/.test(regPhoneNumber.value));
+
+// 注册回调，Cloudflare Turnstile 成功后调用
+window.onTurnstileSuccess = (token) => {
+  regTurnstileToken.value = token;
+}
 
 watch(showLoginPopup, (newValue) => {
   if (newValue) {
@@ -161,29 +196,31 @@ watch(showLoginPopup, (newValue) => {
   };
 // 注册方法
 const handleRegister = () => {
-      console.log('执行注册操作');
-      // 在这里执行注册操作
-      showLoginPopup.value = false;
-    };
-// 获取验证码方法
+  // 打开注册弹窗
+  showLoginPopup.value = false;
+  showRegisterPopup.value = true;
+};
+
+const cancelRegister = () => {
+  showRegisterPopup.value = false;
+}
+
+// 获取验证码方法 (使用 fetch 避免 blob responseType 导致的 devtools 错误)
 const getCaptcha = async () => {
   try {
-    isCaptchaLoading.value = true
-    const response = await axios.get('/api/captcha', {
-      responseType: 'blob'
-    })
-    
-    const uuid = response.headers['captcha-key']
-    captchaKey.value = uuid
-    
-    const blob = new Blob([response.data], { type: 'image/jpeg' })
-    captchaImage.value = URL.createObjectURL(blob)
+    isCaptchaLoading.value = true;
+    const response = await fetch('/api/captcha');
+    const blob = await response.blob();
+    const uuid = response.headers.get('captcha-key');
+    captchaKey.value = uuid;
+    captchaImage.value = URL.createObjectURL(blob);
   } catch (error) {
-    console.error('获取验证码失败:', error)
+    console.error('获取验证码失败:', error);
   } finally {
-    isCaptchaLoading.value = false
+    isCaptchaLoading.value = false;
   }
-}
+};
+
 // 退出登录方法
 const handleLogout = () => {
   // 关闭下拉菜单
@@ -192,6 +229,7 @@ const handleLogout = () => {
   authStore.logout(); // 调用 logout 方法
   router.push({ name: 'Index' }); // 退出后跳转到首页
 };
+
 // 登录方法
 const handleLogin = async () => {
   try {
@@ -227,6 +265,43 @@ const handleLogin = async () => {
     getCaptcha()
   }
 }
+
+// 提交注册
+const handleRegisterSubmit = async () => {
+  try {
+    // 注册并获取 token
+    const resp = await axios.post('/api/users/register', {
+      username: regUsername.value,
+      password: regPassword.value,
+      email: regEmail.value,
+      phoneNumber: regPhoneNumber.value,
+      turnstileToken: regTurnstileToken.value
+    });
+    // 假设后端返回 { userId, username, token }
+    const { token, userId, username } = resp.data.data;
+    // 存储并更新登录状态
+    sessionStorage.setItem('jwtToken', token);
+    authStore.login({ id: userId, username: username, token });
+    window.alert('注册成功，已为您自动登录');
+    showRegisterPopup.value = false;
+  } catch (error) {
+    console.error('注册失败', error);
+    const status = error.response?.status;
+    const msg = error.response?.data?.message;
+    if (status === 400 && msg) {
+      // 精确返回后端的错误信息
+      window.alert(msg);
+      // 重置 Turnstile，允许重新验证
+      if (window.turnstile && turnstileWidgetId.value !== null) {
+        window.turnstile.reset(turnstileWidgetId.value);
+      }
+      regTurnstileToken.value = '';
+    } else {
+      // 其他异常，提示通用信息
+      window.alert('注册失败，请稍后重试');
+    }
+  }
+};
 
 const isLoggedIn = computed(() => authStore.isLoggedIn);
 const userInfo = computed(() => authStore.userInfo);
@@ -338,6 +413,19 @@ const currentPageTitle = computed(() => {
     case 'profile': return '个人中心';
     case 'creator': return '创作者中心';
     default: return '';
+  }
+});
+
+// 自动渲染 Turnstile 小组件：当注册弹窗打开时
+watch(showRegisterPopup, (visible) => {
+  if (visible && window.turnstile) {
+    nextTick(() => {
+      // 渲染 Turnstile 并保存 widgetId
+      turnstileWidgetId.value = window.turnstile.render(
+        document.querySelector('.cf-turnstile'),
+        { sitekey: '0x4AAAAAABZax1N5QEqOLkei', callback: onTurnstileSuccess }
+      );
+    });
   }
 });
 </script>
@@ -668,5 +756,44 @@ body {
 
 .message-icon:hover {
   color: #66b1ff;
+}
+
+.register-popup-overlay {
+  position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+
+.register-popup-content {
+  background: #fff; padding: 20px; border-radius: 8px; width: 90%; max-width: 400px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  display: flex; flex-direction: column; gap: 10px;
+  position: relative; /* allow absolute children */
+}
+
+.register-popup-content .close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.register-popup-content input {
+  padding: 8px; border:1px solid #ccc; border-radius: 4px;
+}
+
+.register-popup-content button {
+  padding: 10px; border:none; border-radius:4px; background: #409EFF; color:#fff; cursor:pointer;
+}
+
+.register-popup-content button:disabled {
+  opacity:0.6; cursor:not-allowed;
+}
+
+/* 注册弹窗错误提示 */
+.error-msg {
+  color: #f56c6c;
+  font-size: 12px;
+  margin: 4px 0 8px;
 }
 </style>    
