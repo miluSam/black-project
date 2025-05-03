@@ -50,7 +50,7 @@
           <div @click="handlePostClick(post.id)" v-for="post in displayedPosts" :key="post.id" class="post-item">
             <div v-if="isAdmin" class="admin-menu">
               <span class="menu-icon" @click.stop="toggleMenu(post.id)">⋮</span>
-              <div v-if="openMenuPostId === post.id" class="menu-dropdown" @click.stop>
+              <div v-if="openMenuPostId === post.id" class="menu-dropdown" @click.stop @mouseleave="closeMenu">
                 <div class="dropdown-item" @click="openDeleteDialog(post.id)">删除帖子</div>
               </div>
             </div>
@@ -792,6 +792,10 @@ export default defineComponent({
     const toggleMenu = (postId) => {
       openMenuPostId.value = openMenuPostId.value === postId ? null : postId;
     };
+    // 关闭管理员菜单
+    const closeMenu = () => {
+      openMenuPostId.value = null;
+    };
 
     return {
       openDeleteDialog,
@@ -834,7 +838,8 @@ export default defineComponent({
       executeDeletePost,
       cancelDelete,
       openMenuPostId,
-      toggleMenu
+      toggleMenu,
+      closeMenu
     };
   }
 });
@@ -1421,14 +1426,22 @@ main {
 }
 
 .menu-icon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   font-size: 20px;
   color: #999;
   user-select: none;
+  border-radius: 6px;
+  transition: background-color 0.2s, color 0.2s;
 }
 
 .menu-icon:hover {
   color: #333;
+  background-color: #c8c8c8; /* 加深灰背景 */
 }
 
 /* 管理员菜单下拉 */
