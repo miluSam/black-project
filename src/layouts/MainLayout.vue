@@ -58,6 +58,13 @@
         <h2>密码登录</h2>
         <input type="text" v-model="username" placeholder="账号" />
         <input type="password" v-model="password" placeholder="密码" @keyup.enter="handleLogin" />
+        <div class="remember-me">
+          <button type="button"
+                  :class="['remember-btn', { active: rememberMe }]"
+                  @click="rememberMe = !rememberMe">
+            {{ rememberMe ? '已记住' : '记住我' }}
+          </button>
+        </div>
         <div class="captcha-section">
       <div class="captcha-image-wrapper">
         <img 
@@ -119,8 +126,9 @@
       <input type="tel" v-model="regPhoneNumber" placeholder="手机号" />
       <div v-if="regPhoneNumber && !isPhoneValid" class="error-msg">请输入有效的手机号</div>
       <div class="cf-turnstile" data-sitekey="0x4AAAAAABZax1N5QEqOLkei" data-callback="onTurnstileSuccess"></div>
+      <div v-if="loadingTurnstile" class="turnstile-loading">正在加载人机验证，请稍候...</div>
       <button @click="handleRegisterSubmit"
-              :disabled="!regUsername || !regPassword || !isEmailValid || !isPhoneValid || !regTurnstileToken">
+              :disabled="loadingTurnstile || !regUsername || !regPassword || !isEmailValid || !isPhoneValid || !regTurnstileToken">
         注册
       </button>
     </div>
@@ -154,8 +162,10 @@ const captchaImage = ref('')
 const captchaKey = ref('')
 const userCaptcha = ref('')
 const isCaptchaLoading = ref(false)
+const rememberMe = ref(false)
 const isDropdownVisible = ref(false)
 const searchQuery = ref('');
+const loadingTurnstile = ref(false);
 
 // 验证邮箱格式
 const isEmailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail.value));
@@ -237,7 +247,8 @@ const handleLogin = async () => {
       username: username.value,
       password: password.value,
       captcha: userCaptcha.value,
-      captchaKey: captchaKey.value
+      captchaKey: captchaKey.value,
+      rememberMe: rememberMe.value
     }
     
     const response = await axios.post('/api/login', user)
@@ -245,7 +256,11 @@ const handleLogin = async () => {
     if (response.data.code === 200) {
       // 确保存储 token
       const token = response.data.data.token;
-      sessionStorage.setItem('jwtToken', token);
+      if (rememberMe.value) {
+        localStorage.setItem('jwtToken', token);
+      } else {
+        sessionStorage.setItem('jwtToken', token);
+      }
       
       // 更新 Pinia 状态
       authStore.login({
@@ -257,6 +272,7 @@ const handleLogin = async () => {
       // 清理表单
       username.value = ''
       password.value = ''
+      rememberMe.value = false
       userCaptcha.value = ''
       captchaKey.value = ''
     }
@@ -416,17 +432,29 @@ const currentPageTitle = computed(() => {
   }
 });
 
-// 自动渲染 Turnstile 小组件：当注册弹窗打开时
+// 自动渲染 Turnstile 小组件：当注册弹窗打开时，重试直到脚本加载完成
 watch(showRegisterPopup, (visible) => {
-  if (visible && window.turnstile) {
-    nextTick(() => {
-      // 渲染 Turnstile 并保存 widgetId
-      turnstileWidgetId.value = window.turnstile.render(
-        document.querySelector('.cf-turnstile'),
-        { sitekey: '0x4AAAAAABZax1N5QEqOLkei', callback: onTurnstileSuccess }
-      );
-    });
-  }
+  if (!visible) return;
+  loadingTurnstile.value = true;
+  let attempts = 0;
+  const tryRender = () => {
+    if (window.turnstile) {
+      nextTick(() => {
+        turnstileWidgetId.value = window.turnstile.render(
+          document.querySelector('.cf-turnstile'),
+          { sitekey: '0x4AAAAAABZax1N5QEqOLkei', callback: onTurnstileSuccess }
+        );
+        loadingTurnstile.value = false;
+      });
+    } else if (attempts < 10) {
+      attempts++;
+      setTimeout(tryRender, 200);
+    } else {
+      console.error('Turnstile 脚本未加载');
+      loadingTurnstile.value = false;
+    }
+  };
+  tryRender();
 });
 </script>
 
@@ -795,5 +823,47 @@ body {
   color: #f56c6c;
   font-size: 12px;
   margin: 4px 0 8px;
+}
+
+.turnstile-loading {
+  color: #909399;
+  font-size: 14px;
+  margin: 8px 0;
+}
+
+/* 记住我按钮样式 */
+.remember-me {
+  margin: 10px 0;
+  text-align: left;
+}
+
+.remember-btn {
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #f5f5f5;
+  cursor: pointer;
+  color: #333;
+  font-size: 14px;
+}
+
+.remember-btn.active {
+  background-color: #ffd04b;
+  border-color: #ffc72b;
+  color: #333;
+}
+
+/* 禁用记住我按钮的悬浮变色 */
+.remember-btn:hover {
+  /* 默认未选中时保持灰色 */
+  background-color: #f5f5f5;
+  /* 保持边框颜色 */
+  border-color: #ccc;
+}
+
+.remember-btn.active:hover {
+  /* 选中时保持黄色 */
+  background-color: #ffd04b;
+  border-color: #ffc72b;
 }
 </style>    

@@ -766,13 +766,13 @@ export default defineComponent({
       const reason = deleteReason.value.trim();
       if (!postId || !reason) return;
       const postItem = posts.value.find(p => p.id === postId) || {};
-      const recipientId = postItem.user?.id;
+      const receiverId = postItem.user?.id;
       const title = postItem.title || '';
       try {
         const jwtToken = authStore.userInfo.token || sessionStorage.getItem('jwtToken') || localStorage.getItem('jwtToken');
         await axios.delete(`/api/posts/${postId}`, { headers: { Authorization: `Bearer ${jwtToken}` }, data: { reason } });
-        if (recipientId) {
-          await axios.post('/api/messages/send', { recipientId, content: `您的帖子《${title}》已被管理员删除，原因：${reason}` }, { headers: { Authorization: `Bearer ${jwtToken}` } });
+        if (receiverId) {
+          await axios.post('/api/messages/send', { receiverId, content: `您的帖子《${title}》已被管理员删除，原因：${reason}` }, { headers: { Authorization: `Bearer ${jwtToken}` } });
         }
         window.alert('帖子已删除，已通知作者');
         fetchPosts();
