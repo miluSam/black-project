@@ -289,6 +289,8 @@ import axios from 'axios';
 import { Message, Document, Picture, Close, Star, Check, RefreshRight, Loading, Delete, Download } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { eventBus } from '@/plugins/eventBus';
+import SockJS from 'sockjs-client'
+import Stomp from 'stompjs'
 
 const router = useRouter();
 const route = useRoute();
@@ -328,6 +330,9 @@ const selectedFavorite = ref(null);
 // 添加加载状态变量
 const loadingFavorites = ref(false);
 const loadingContacts = ref(false);
+
+const token = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken')
+let stompClient = null
 
 // 页面导航方法
 const goToPage = (path) => {
@@ -1051,29 +1056,19 @@ const sendMessage = async () => {
     newMessage.value = '';
   }
 
-  // 先在UI中添加这条消息
-  messages.value.push(tempMessage);
+  // 添加 clientId 用于订阅回调匹配临时消息
+  messageData.clientId = tempMessage.id
   
-  // 更新会话的最后一条消息
-  if (selectedConversation.value) {
-    selectedConversation.value.lastMessage = tempMessage.content || (tempMessage.isSharedPost ? '分享了一个帖子' : '发送了一个附件');
-    selectedConversation.value.lastMessageTime = new Date().toISOString();
-    
-    // 如果是临时会话，确保其位于列表顶部
-    const convId = selectedConversation.value.id;
-    if (typeof convId === 'string' && (convId.startsWith('new_') || convId.startsWith('temp_'))) {
-      const index = conversations.value.findIndex(c => c.id === selectedConversation.value.id);
-      if (index > 0) {
-        const conv = conversations.value.splice(index, 1)[0];
-        conversations.value.unshift(conv);
-      }
-    }
+  // 本地乐观更新：先插入临时消息到列表并滚动到底部
+  messages.value.push(tempMessage)
+  nextTick(() => scrollToBottom())
+
+  // 如果有 stompClient，直接发送消息
+  if (stompClient) {
+    stompClient.send('/app/chat.send', {}, JSON.stringify(messageData))
+    return
   }
-  
-  // 滚动到底部
-  await nextTick();
-  scrollToBottom();
-  
+
   try {
     const jwtToken = localStorage.getItem('jwtToken') || sessionStorage.getItem('jwtToken');
     
@@ -1897,6 +1892,37 @@ const startConversationWith = async (contact) => {
 
 // 在组件挂载后自动加载会话列表
 onMounted(async () => {
+  // 建立全双工 STOMP WebSocket 连接
+  const socket = new SockJS('/ws')
+  stompClient = Stomp.over(socket)
+  stompClient.connect(
+    { Authorization: 'Bearer ' + token },
+    frame => {
+      stompClient.subscribe('/user/queue/messages', msg => {
+        const body = JSON.parse(msg.body)
+        // 如果有 clientId，则是自己消息的回执，更新临时消息并退出
+        if (body.clientId) {
+          const idx = messages.value.findIndex(m => m.id === body.clientId)
+          if (idx !== -1) {
+            const original = messages.value[idx]
+            messages.value[idx] = {
+              ...original,
+              ...body,
+              // 确保仍显示为自己发出的消息
+              senderId: authStore.userInfo.id,
+              senderName: authStore.userInfo.username,
+              status: 'sent'
+            }
+          }
+          return
+        }
+        // 没有 clientId 的，视为对方新消息，直接追加
+        messages.value.push(body)
+        nextTick(() => scrollToBottom())
+      })
+    },
+    err => console.error('STOMP 连接失败', err)
+  )
   // 检查是否是由消息发送后的刷新
   const needsRefresh = localStorage.getItem('needsRefreshAfterSend');
   const refreshTimestamp = localStorage.getItem('refreshTimestamp');
@@ -2234,6 +2260,8 @@ onBeforeUnmount(() => {
   // 停止轮询
   stopPolling();
   
+  // 断开 STOMP 连接
+  stompClient && stompClient.disconnect()
   // 其他现有清理代码保持不变
 });
 
